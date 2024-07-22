@@ -6,6 +6,7 @@ use super::{
     error::ArchetypeError,
 };
 
+#[derive(Debug)]
 pub struct Archetype {
     pub components: HashMap<std::any::TypeId, ComponentList>,
     pub entities: Vec<EntityId>,
@@ -21,6 +22,16 @@ impl Archetype {
             entities: vec![entity_id],
         }
     }
+    pub fn new_from_migration(entity_id: EntityId, components: MovedEntity) -> Self {
+        let mut components_map = HashMap::new();
+        for (type_id, component) in components {
+            components_map.insert(type_id, ComponentList { components: vec![component] });
+        }
+        Self {
+            components: components_map,
+            entities: vec![entity_id],
+        }
+    }
 
     pub fn add_entity(&mut self, entity_id: EntityId, components: impl BundleComponent) {
         for (type_id, component_list) in components.create_map_components() {
@@ -29,6 +40,17 @@ impl Archetype {
                 .or_insert_with(ComponentList::new)
                 .components
                 .extend(component_list.components);
+        }
+        self.entities.push(entity_id);
+    }
+
+    pub fn add_entity_migrated(&mut self, entity_id: EntityId, components: MovedEntity) {
+        for (type_id, component) in components {
+            self.components
+                .entry(type_id)
+                .or_insert_with(ComponentList::new)
+                .components
+                .push(component);
         }
         self.entities.push(entity_id);
     }
@@ -69,7 +91,6 @@ impl Archetype {
     pub fn has_type(&self, type_id: std::any::TypeId) -> bool {
         self.components.contains_key(&type_id)
     }
-
 }
 
 #[test]

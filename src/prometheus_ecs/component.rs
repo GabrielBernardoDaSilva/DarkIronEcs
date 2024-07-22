@@ -3,6 +3,7 @@ use std::{cell::RefCell, collections::HashMap, fmt::Debug};
 pub trait Component: Debug {}
 pub trait BundleComponent {
     fn create_map_components(self) -> HashMap<std::any::TypeId, ComponentList>;
+    fn get_types_id(&self) -> Vec<std::any::TypeId>;
 }
 
 impl<T: Debug> Component for T {}
@@ -61,7 +62,13 @@ macro_rules! impl_bundle_component {
                 map.insert(std::any::TypeId::of::<$head>(), ComponentList::new());
                 map
             }
+
+            fn get_types_id(&self) -> Vec<std::any::TypeId> {
+                vec![std::any::TypeId::of::<$head>()]
+            }
         }
+
+        
     };
     // Recursive case: Implement for tuples with more than one element
     ( $head:ident, $($tail:ident),+ ) => {
@@ -82,6 +89,10 @@ macro_rules! impl_bundle_component {
                     map.insert(std::any::TypeId::of::<$tail>(), component_list);
                 )*
                 map
+            }
+
+            fn get_types_id(&self) -> Vec<std::any::TypeId> {
+                vec![std::any::TypeId::of::<$head>(), $(std::any::TypeId::of::<$tail>()),*]
             }
         }
     }
