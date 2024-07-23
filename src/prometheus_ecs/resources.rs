@@ -1,4 +1,9 @@
-use std::ops::{Deref, DerefMut};
+use std::{
+    any::TypeId,
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
 
 use super::as_any_trait::AsAny;
 
@@ -8,6 +13,8 @@ pub struct Resource<T: ?Sized> {
     pub value: *const T,
     pub type_id: std::any::TypeId,
 }
+
+impl<T: 'static> ResourceTrait for Resource<T> {}
 
 impl<T: 'static> Resource<T> {
     pub fn new(value: T) -> Self {
@@ -67,8 +74,20 @@ impl<T: 'static> std::fmt::Display for Resource<T> {
     }
 }
 
-
-
 pub struct ResourceManager {
-   
-}   
+    pub resources: HashMap<TypeId, Rc<dyn ResourceTrait>>,
+}
+
+impl ResourceManager {
+    pub fn new() -> Self {
+        ResourceManager {
+            resources: HashMap::new(),
+        }
+    }
+
+    pub fn add<T: 'static>(&mut self, resource: T) {
+        let res = Resource::new(resource);
+
+        self.resources.insert(TypeId::of::<T>(), Rc::new(res));
+    }
+}
