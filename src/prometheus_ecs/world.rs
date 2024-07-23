@@ -7,7 +7,7 @@ use super::{
     event::{EventHandler, EventManager},
     query::{Query, QueryConstraint, QueryParams},
     resources::{Resource, ResourceManager},
-    system::{IntoSystem, SystemManager},
+    system::{IntoSystem, SystemBundle, SystemManager, SystemSchedule},
 };
 
 pub struct World {
@@ -75,16 +75,38 @@ impl World {
         self.entity_manager.as_ptr() as *mut EntityManager
     }
 
-    pub fn add_system<P>(&self, system: impl IntoSystem<P>) {
-        self.system_manager.borrow_mut().add_system(system);
+    pub fn add_system<P>(&self, system_scheduler: SystemSchedule, system: impl IntoSystem<P>) {
+        self.system_manager
+            .borrow_mut()
+            .add_system(system_scheduler, system);
+    }
+    // pub fn add_systems<P: 'static>(&self, system_scheduler: SystemSchedule, systems: impl SystemBundle<P>) {
+    //     let system_manager = unsafe { &mut (*self.get_system_manager_mut()) };
+    //     systems.add_systems(system_scheduler, system_manager);
+    // }
+
+    pub fn add_systems<P: 'static>(
+        &self,
+        action: SystemSchedule,
+        systems: impl SystemBundle<P>,
+    ) -> &Self {
+        let system_manager = unsafe { &mut (*self.get_system_manager_mut()) };
+        systems.add_systems(action, system_manager);
+
+        self
     }
 
-    pub fn run_systems(&self) {
-        self.system_manager.borrow_mut().run_systems(self);
+
+    pub fn run_update(&self) {
+        self.system_manager.borrow_mut().run_update_systems(self);
     }
 
     pub(crate) unsafe fn get_system_manager(&self) -> *const SystemManager {
         self.system_manager.as_ptr()
+    }
+
+    pub(crate) unsafe fn get_system_manager_mut(&self) -> *mut SystemManager {
+        self.system_manager.as_ptr() as *mut SystemManager
     }
 
     pub fn publish_event<T: 'static>(&self, event: T) {

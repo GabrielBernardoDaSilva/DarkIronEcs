@@ -51,6 +51,7 @@ impl Archetype {
                 .or_insert_with(ComponentList::new)
                 .components
                 .push(component);
+
         }
         self.entities.push(entity_id);
     }
