@@ -8,4 +8,5 @@ pub mod world;
 pub mod entity_manager;
 pub mod event;
 pub mod resources;
+pub mod coroutine;
 pub mod as_any_trait;
