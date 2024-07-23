@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![allow(unused_imports)]
 
 use prometheus_ecs::{
     entity_manager::EntityManager,
