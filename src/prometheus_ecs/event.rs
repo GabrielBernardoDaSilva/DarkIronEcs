@@ -81,3 +81,9 @@ impl<'a> SystemParam<'a> for &EventManager {
         unsafe { &(*world.get_event_manager()) }
     }
 }
+
+impl<'a> SystemParam<'a> for &mut EventManager {
+    fn get_param(world: &'a World) -> Self {
+        unsafe { &mut (*world.get_event_manager_mut()) }
+    }
+}

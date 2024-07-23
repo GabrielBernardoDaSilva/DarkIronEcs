@@ -75,7 +75,12 @@ impl<'a, T: 'static + Debug> Fetch<'a> for &T {
     type Result = Self;
     fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Self::Result {
         let type_id = TypeId::of::<T>();
-
+        println!(
+            "comp name: {:?}, comp id: {:?}, entity {:?}",
+            std::any::type_name::<T>(),
+            type_id,
+            entity_id
+        );
         let res = archetypes.components.get(&type_id).unwrap();
         let c: &mut T = res.get_mut(entity_id as usize).unwrap();
         return unsafe {
@@ -146,7 +151,9 @@ macro_rules! impl_query_constrains {
     };
 }
 
-impl_query_constrains!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
+impl_query_constrains!(
+    A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+);
 
 impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T, Constraint> {
     pub fn new(archetypes: &'a Vec<Archetype>) -> Self {
@@ -157,46 +164,40 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
         }
     }
 
-    pub fn fetch(&mut self) {
+    pub fn iter(&self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
         let types = T::types_id();
         let constraint_types = Constraint::constraint_types();
+        let mut components = Vec::new();
 
         for arch in self.archetypes.iter() {
-            let mut contains_all = true;
-            let mut has_constraint = false;
-            for type_id in types.iter() {
-                if !arch.has_type(*type_id) {
-                    contains_all = false;
-                    continue;
-                }
-            }
+            let has_any_entities = arch.entities.is_empty();
+            let is_archetype_components_bigger = types.len() > arch.components.len();
+            let contains_all = types
+                .iter()
+                .any(|type_id| -> bool { arch.has_type(*type_id) });
+            let has_constraint = constraint_types
+                .iter()
+                .any(|type_id| -> bool { arch.has_type(*type_id) });
 
-            for type_id in constraint_types.iter() {
-                if arch.has_type(*type_id) {
-                    has_constraint = true;
-                    break;
+            if contains_all && !has_any_entities && !is_archetype_components_bigger && !has_constraint
+            {
+                for (index, _) in arch.entities.iter().enumerate() {
+                    let component = T::get_component_in_archetype(arch, index as u32);
+                    components.push(component);
                 }
-            }
-
-            if !contains_all || has_constraint {
-                continue;
-            }
-            for (index, _) in arch.entities.iter().enumerate() {
-                let component = T::get_component_in_archetype(arch, index as u32);
-                self.components.push(component);
             }
         }
+        return components;
     }
 }
 
-impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam<'a> for Query<'a, T, Constraint> {
+impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam<'a>
+    for Query<'a, T, Constraint>
+{
     fn get_param(world: &'a World) -> Self {
-        let ptr_archetype = unsafe {
-            &(*world.entity_manager.as_ptr()).archetypes
-        };
-        
-        let mut query = Query::<T, Constraint>::new(ptr_archetype);
-        query.fetch();
+        let ptr_archetype = unsafe { &(*world.entity_manager.as_ptr()).archetypes };
+
+        let query = Query::<T, Constraint>::new(ptr_archetype);
         query
     }
 }
@@ -220,12 +221,9 @@ fn query_test() {
     arch.add_entity(2, (Health(300), Position(2, 3), Name("Hello".to_string())));
     let v = vec![arch];
 
-
-    let mut q = Query::<(&Health, &Velocity, &Position), Without<(&Name,)>>::new(&v);
+    let q = Query::<(&Health, &Velocity, &Position), Without<(&Name,)>>::new(&v);
     let _q1 = Query::<(&mut Health,)>::new(&v);
     // let _q2 = Query::<(&mut Health, &mut Velocity)>::new(&v);
-
-    q.fetch();
 
     for (health, velocity, position) in q.components {
         println!("{:?} {:?} {:?}", health, velocity, position);

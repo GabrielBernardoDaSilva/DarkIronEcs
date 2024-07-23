@@ -18,7 +18,9 @@ struct Health(i32);
 
 fn test_system(q: Query<(&Health,)>, entity_manager: &mut EntityManager) {
     println!("{:?}", q.components);
-    for health in q.components {
+    entity_manager.create_entity((Health(500), ));
+    println!("{:?}", entity_manager.archetypes);
+    for health in q.iter() {
         println!("{:?}", health);
     }
 
@@ -31,8 +33,8 @@ fn test_system_1(
     entity_manager: &EntityManager,
     camera: Resource<Camera>
 ) {
-    println!("{:?}", q.components);
-    println!("{:?}", q2.components);
+    println!("{:?}", q.components.iter());
+    println!("{:?}", q2.components.iter());
     println!("{:?}", entity_manager.archetypes);
     println!("Hello from test_system_1");
     println!("{:?} {:?} {:?}", camera.x, camera.y, camera.z);
@@ -53,7 +55,7 @@ fn main() {
         println!("Collision Event Hit");
     });
 
-    world.create_entity((Name("Enemy".to_string()), Health(100)));
+    world.create_entity((Health(100), ));
 
     world.create_entity((Name("Enemy 2".to_string()), Health(200)));
 
@@ -66,7 +68,7 @@ fn main() {
     world.add_resource(Camera { x: 1000.0, y: 0.0, z: 0.0 });
 
 
-    world.create_entity((Position { x: 2.0, y: 2.0 }, Health(400)));
+    // world.create_entity((Position { x: 2.0, y: 2.0 }, Health(400)));
 
     world.add_system(test_system);
 

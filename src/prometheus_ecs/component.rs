@@ -1,8 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, fmt::Debug};
 
+use super::entity::EntityId;
+
 pub trait Component: Debug {}
 pub trait BundleComponent {
-    fn create_map_components(self) -> HashMap<std::any::TypeId, ComponentList>;
+    fn create_map_components(self, entity_id: EntityId)
+        -> HashMap<std::any::TypeId, ComponentList>;
     fn get_types_id(&self) -> Vec<std::any::TypeId>;
 }
 
@@ -57,18 +60,24 @@ macro_rules! impl_bundle_component {
     // Base case: Implement for a single element tuple
     ( $head:ident ) => {
         impl< $head: 'static + Debug > BundleComponent for ($head,) {
-            fn create_map_components(self) -> HashMap<std::any::TypeId, ComponentList> {
+            fn create_map_components(self, entity_id: EntityId) -> HashMap<std::any::TypeId, ComponentList> {
                 let mut map = HashMap::new();
-                map.insert(std::any::TypeId::of::<$head>(), ComponentList::new());
+                let mut component_list = ComponentList::new();
+                component_list.add(self.0);
+                map.insert(std::any::TypeId::of::<$head>(), component_list);
+
+                let mut component_list = ComponentList::new();
+                component_list.add(super::entity::Entity::new(entity_id, 0));
+                map.insert(std::any::TypeId::of::<super::entity::Entity>(), component_list);
                 map
             }
 
             fn get_types_id(&self) -> Vec<std::any::TypeId> {
-                vec![std::any::TypeId::of::<$head>()]
+                vec![std::any::TypeId::of::<$head>(), std::any::TypeId::of::<super::entity::Entity>()]
             }
         }
 
-        
+
     };
     // Recursive case: Implement for tuples with more than one element
     ( $head:ident, $($tail:ident),+ ) => {
@@ -77,7 +86,7 @@ macro_rules! impl_bundle_component {
 
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
-            fn create_map_components(self) -> HashMap<std::any::TypeId, ComponentList> {
+            fn create_map_components(self,  entity_id: EntityId) -> HashMap<std::any::TypeId, ComponentList> {
                 let mut map = HashMap::new();
                 let ($head, $($tail),*) = self;
                 let mut component_list = ComponentList::new();

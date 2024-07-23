@@ -1,7 +1,13 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::{
-    component::{BundleComponent, Component}, entity::Entity, entity_manager::EntityManager, event::{EventHandler, EventManager}, query::{Query, QueryConstraint, QueryParams}, resources::{Resource, ResourceManager}, system::{IntoSystem, SystemManager}
+    component::{BundleComponent, Component},
+    entity::Entity,
+    entity_manager::EntityManager,
+    event::{EventHandler, EventManager},
+    query::{Query, QueryConstraint, QueryParams},
+    resources::{Resource, ResourceManager},
+    system::{IntoSystem, SystemManager},
 };
 
 pub struct World {
@@ -49,8 +55,7 @@ impl World {
 
     pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<'a, T> {
         let entity_manager_ptr = self.entity_manager.as_ptr();
-        let mut q = unsafe { Query::<T>::new(&(*entity_manager_ptr).archetypes) };
-        q.fetch();
+        let q = unsafe { Query::<T>::new(&(*entity_manager_ptr).archetypes) };
         q
     }
 
@@ -58,8 +63,7 @@ impl World {
         &'a self,
     ) -> Query<'a, T, C> {
         let entity_manager_ptr = self.entity_manager.as_ptr();
-        let mut q = unsafe { Query::<T, C>::new(&(*entity_manager_ptr).archetypes) };
-        q.fetch();
+        let q = unsafe { Query::<T, C>::new(&(*entity_manager_ptr).archetypes) };
         q
     }
 
@@ -96,6 +100,10 @@ impl World {
         self.event_manager.as_ptr()
     }
 
+    pub(crate) unsafe fn get_event_manager_mut(&self) -> *mut EventManager {
+        self.event_manager.as_ptr() as *mut EventManager
+    }
+
     pub fn add_resource<T: 'static>(&self, resource: T) {
         self.resources.borrow_mut().add(resource);
     }
@@ -104,8 +112,11 @@ impl World {
         self.resources.borrow().get_resource::<T>()
     }
 
-
     pub(crate) unsafe fn get_resource_manager(&self) -> *const ResourceManager {
         self.resources.as_ptr()
+    }
+
+    pub(crate) unsafe fn get_resource_manager_mut(&self) -> *mut ResourceManager {
+        self.resources.as_ptr() as *mut ResourceManager
     }
 }

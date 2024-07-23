@@ -115,3 +115,17 @@ impl ResourceManager {
         Some(resource.clone())
     }
 }
+
+impl<'a> SystemParam<'a> for &ResourceManager {
+    fn get_param(world: &'a super::world::World) -> Self {
+        unsafe { &(*world.get_resource_manager()) }
+    }
+
+}
+
+impl<'a> SystemParam<'a> for &mut ResourceManager {
+    fn get_param(world: &'a super::world::World) -> Self {
+        unsafe { &mut (*world.get_resource_manager_mut()) }
+    }
+}
+

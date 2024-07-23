@@ -16,7 +16,7 @@ pub type MovedEntity = HashMap<std::any::TypeId, Box<RefCell<dyn Component>>>;
 
 impl Archetype {
     pub fn new(entity_id: EntityId, components: impl BundleComponent) -> Self {
-        let components = components.create_map_components();
+        let components = components.create_map_components(entity_id);
         Self {
             components,
             entities: vec![entity_id],
@@ -34,7 +34,7 @@ impl Archetype {
     }
 
     pub fn add_entity(&mut self, entity_id: EntityId, components: impl BundleComponent) {
-        for (type_id, component_list) in components.create_map_components() {
+        for (type_id, component_list) in components.create_map_components(entity_id) {
             self.components
                 .entry(type_id)
                 .or_insert_with(ComponentList::new)
