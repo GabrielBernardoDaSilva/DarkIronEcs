@@ -5,7 +5,7 @@ use super::{
     entity::Entity,
     entity_manager::EntityManager,
     event::{EventHandler, EventManager},
-    query::{Query, QueryParams},
+    query::{Query, QueryConstraint, QueryParams},
     system::{IntoSystem, SystemManager},
 };
 
@@ -17,16 +17,13 @@ pub struct World {
 
 impl World {
     pub fn new() -> Self {
-
-
-         Self {
+        let world = Self {
             entity_manager: Rc::new(RefCell::new(EntityManager::new())),
             system_manager: Rc::new(RefCell::new(SystemManager::new())),
             event_manager: Rc::new(RefCell::new(EventManager::new())),
-        }
-
-    
-
+        };
+        world.event_manager.borrow_mut().set_world(&world);
+        world
     }
 
     pub fn create_entity(&mut self, components: impl BundleComponent) -> Entity {
@@ -55,7 +52,16 @@ impl World {
 
     pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<'a, T> {
         let entity_manager_ptr = self.entity_manager.as_ptr();
-        let mut q = Query::<T>::new(unsafe { &(*entity_manager_ptr).archetypes });
+        let mut q = unsafe { Query::<T>::new(&(*entity_manager_ptr).archetypes) };
+        q.fetch();
+        q
+    }
+
+    pub fn create_query_with_constraint<'a, T: QueryParams<'a>, C: QueryConstraint>(
+        &'a self,
+    ) -> Query<'a, T, C> {
+        let entity_manager_ptr = self.entity_manager.as_ptr();
+        let mut q = unsafe { Query::<T, C>::new(&(*entity_manager_ptr).archetypes) };
         q.fetch();
         q
     }
@@ -77,7 +83,7 @@ impl World {
     }
 
     pub fn publish_event<T: 'static>(&self, event: T) {
-        self.event_manager.borrow_mut().publish(self, event);
+        self.event_manager.borrow_mut().publish(event);
     }
 
     pub fn subscribe_event<T: 'static, FUNC: 'static + Fn(&World, T)>(&self, system: FUNC) {

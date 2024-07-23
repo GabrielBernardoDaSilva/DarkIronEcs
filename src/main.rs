@@ -3,7 +3,7 @@
 use prometheus_ecs::{
     entity_manager::EntityManager,
     event::EventManager,
-    query::Query,
+    query::{Query, Without},
     system::{IntoSystem, System, SystemManager},
     world::World,
 };
@@ -22,10 +22,16 @@ struct Health(i32);
 
 fn test_system(q: Query<(&Health,)>) {
     println!("{:?}", q.components);
-    
+    for health in q.components {
+        println!("{:?}", health);
+    }
 }
 
-fn test_system_1(q: Query<(&Health,)>, q2: Query<(&Health,)>, entity_manager: &EntityManager) {
+fn test_system_1(
+    q: Query<(&Health,)>,
+    q2: Query<(&Health,), Without<(&Name,)>>,
+    entity_manager: &EntityManager,
+) {
     println!("{:?}", q.components);
     println!("{:?}", q2.components);
     println!("{:?}", entity_manager.archetypes);
@@ -41,7 +47,6 @@ fn main() {
         println!("Collision Event Hit");
     });
 
-
     world.create_entity((Name("Enemy".to_string()), Health(100)));
 
     world.create_entity((Name("Enemy 2".to_string()), Health(200)));
@@ -52,9 +57,11 @@ fn main() {
         Health(300),
     ));
 
+
     world.create_entity((Position { x: 2.0, y: 2.0 }, Health(400)));
 
     world.add_system(test_system);
+
     world.add_system(test_system_1);
 
     world.run_systems();

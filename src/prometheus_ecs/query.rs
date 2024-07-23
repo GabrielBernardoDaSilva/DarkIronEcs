@@ -13,10 +13,38 @@ pub trait QueryParams<'a> {
     fn types_id() -> Vec<TypeId>;
 }
 
-pub struct Query<'a, T: QueryParams<'a> + 'static> {
+pub trait QueryConstraint {
+    fn constraint_types() -> Vec<TypeId>;
+}
+
+impl QueryConstraint for () {
+    fn constraint_types() -> Vec<TypeId> {
+        Vec::new()
+    }
+}
+
+pub trait Constraints {
+    fn constraint_types() -> Vec<TypeId>;
+}
+
+pub struct Without<T: Constraints + 'static>(std::marker::PhantomData<T>);
+
+impl<T: Constraints> QueryConstraint for Without<T> {
+    fn constraint_types() -> Vec<TypeId> {
+        T::constraint_types()
+    }
+}
+
+impl Constraints for () {
+    fn constraint_types() -> Vec<TypeId> {
+        Vec::new()
+    }
+}
+
+pub struct Query<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint = ()> {
     pub components: Vec<<T as QueryParams<'a>>::QueryResult>,
     pub archetypes: &'a Vec<Archetype>,
-    _marked: std::marker::PhantomData<T>,
+    _marked: std::marker::PhantomData<Constraint>,
 }
 pub trait Fetch<'a> {
     type Result;
@@ -100,7 +128,27 @@ macro_rules! impl_query_params {
 
 impl_query_params!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
-impl<'a, T: QueryParams<'a> + 'static> Query<'a, T> {
+macro_rules! impl_query_constrains {
+    ( $head:ident ) => {
+        impl<$head: for<'a> Fetch<'a> + Debug + 'static > Constraints for ($head,) {
+            fn constraint_types() -> Vec<TypeId> {
+                vec![<$head>::get_type_id()]
+            }
+        }
+    };
+    ( $head:ident, $($tail:ident),+ ) => {
+        impl<$head: for<'a> Fetch<'a> + Debug + 'static, $($tail: for<'a> Fetch<'a> + Debug + 'static),+> Constraints for ($head, $($tail),+) {
+            fn constraint_types() -> Vec<TypeId> {
+                vec![<$head>::get_type_id(), $($tail::get_type_id()),+]
+            }
+        }
+        impl_query_constrains!($($tail),+);
+    };
+}
+
+impl_query_constrains!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
+
+impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T, Constraint> {
     pub fn new(archetypes: &'a Vec<Archetype>) -> Self {
         Query {
             components: Vec::new(),
@@ -111,15 +159,26 @@ impl<'a, T: QueryParams<'a> + 'static> Query<'a, T> {
 
     pub fn fetch(&mut self) {
         let types = T::types_id();
+        let constraint_types = Constraint::constraint_types();
+
         for arch in self.archetypes.iter() {
             let mut contains_all = true;
+            let mut has_constraint = false;
             for type_id in types.iter() {
                 if !arch.has_type(*type_id) {
                     contains_all = false;
                     continue;
                 }
             }
-            if !contains_all {
+
+            for type_id in constraint_types.iter() {
+                if arch.has_type(*type_id) {
+                    has_constraint = true;
+                    break;
+                }
+            }
+
+            if !contains_all || has_constraint {
                 continue;
             }
             for (index, _) in arch.entities.iter().enumerate() {
@@ -130,9 +189,15 @@ impl<'a, T: QueryParams<'a> + 'static> Query<'a, T> {
     }
 }
 
-impl<'a, T: QueryParams<'a>> SystemParam<'a> for Query<'a, T> {
+impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam<'a> for Query<'a, T, Constraint> {
     fn get_param(world: &'a World) -> Self {
-        world.create_query::<T>()
+        let ptr_archetype = unsafe {
+            &(*world.entity_manager.as_ptr()).archetypes
+        };
+        
+        let mut query = Query::<T, Constraint>::new(ptr_archetype);
+        query.fetch();
+        query
     }
 }
 
@@ -147,12 +212,16 @@ fn query_test() {
     #[derive(Debug)]
     #[allow(dead_code)]
     pub struct Velocity(i32, i32);
+    #[derive(Debug)]
+    pub struct Name(String);
 
     let mut arch = Archetype::new(0, (Health(100), Position(0, 0), Velocity(0, 0)));
     arch.add_entity(1, (Health(200), Position(1, 1), Velocity(1, 1)));
+    arch.add_entity(2, (Health(300), Position(2, 3), Name("Hello".to_string())));
     let v = vec![arch];
 
-    let mut q = Query::<(&Health, &Velocity, &Position)>::new(&v);
+
+    let mut q = Query::<(&Health, &Velocity, &Position), Without<(&Name,)>>::new(&v);
     let _q1 = Query::<(&mut Health,)>::new(&v);
     // let _q2 = Query::<(&mut Health, &mut Velocity)>::new(&v);
 

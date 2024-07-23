@@ -7,3 +7,5 @@ pub mod system;
 pub mod world;
 pub mod entity_manager;
 pub mod event;
+pub mod resources;
+pub mod as_any_trait;

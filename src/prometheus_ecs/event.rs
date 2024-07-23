@@ -3,16 +3,14 @@ use std::{
     collections::HashMap,
 };
 
-use super::{system::SystemParam, world::World};
+use super::{as_any_trait::AsAny, system::SystemParam, world::World};
 
 pub struct EventHandler<T> {
     pub func: Box<dyn Fn(&World, T)>,
     _marker: std::marker::PhantomData<T>,
 }
 
-pub trait EventTrait {
-    fn to_any(&self) -> &dyn Any;
-}
+pub trait EventTrait: AsAny {}
 
 impl<T> EventHandler<T> {
     pub fn new(func: impl Fn(&World, T) + 'static) -> Self {
@@ -27,33 +25,47 @@ impl<T> EventHandler<T> {
     }
 }
 
-impl<T: 'static> EventTrait for EventHandler<T> {
-    fn to_any(&self) -> &dyn Any {
+impl<T: 'static> EventTrait for EventHandler<T> {}
+
+impl<T: 'static> AsAny for EventHandler<T> {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
 }
 
 pub struct EventManager {
     pub events: HashMap<TypeId, Box<dyn EventTrait>>,
+    pub world: *const World,
 }
 
 impl EventManager {
     pub fn new() -> Self {
         EventManager {
             events: HashMap::new(),
+            world: std::ptr::null(),
         }
+    }
+
+    pub fn set_world(&mut self, world: *const World) {
+        self.world = world;
     }
 
     pub fn subscribe<T: 'static>(&mut self, event: EventHandler<T>) {
         self.events.insert(TypeId::of::<T>(), Box::new(event));
     }
 
-    pub fn publish<T: 'static>(&mut self, world: &World, t: T) {
+    pub fn publish<T: 'static>(&mut self, t: T) {
         let event = self.events.get_mut(&TypeId::of::<T>());
         match event {
             Some(event) => {
-                let event_handler = event.to_any().downcast_ref::<EventHandler<T>>().unwrap();
-                event_handler.call(world, t);
+                let event_handler = event.as_any().downcast_ref::<EventHandler<T>>().unwrap();
+                unsafe {
+                    event_handler.call(&*self.world, t);
+                }
             }
             None => {}
         }
