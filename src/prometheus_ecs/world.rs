@@ -1,18 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::{
-    component::{BundleComponent, Component},
-    entity::Entity,
-    entity_manager::EntityManager,
-    event::{EventHandler, EventManager},
-    query::{Query, QueryConstraint, QueryParams},
-    system::{IntoSystem, SystemManager},
+    component::{BundleComponent, Component}, entity::Entity, entity_manager::EntityManager, event::{EventHandler, EventManager}, query::{Query, QueryConstraint, QueryParams}, resources::{Resource, ResourceManager}, system::{IntoSystem, SystemManager}
 };
 
 pub struct World {
     pub entity_manager: Rc<RefCell<EntityManager>>,
     pub system_manager: Rc<RefCell<SystemManager>>,
     pub event_manager: Rc<RefCell<EventManager>>,
+    pub resources: Rc<RefCell<ResourceManager>>,
 }
 
 impl World {
@@ -21,6 +17,7 @@ impl World {
             entity_manager: Rc::new(RefCell::new(EntityManager::new())),
             system_manager: Rc::new(RefCell::new(SystemManager::new())),
             event_manager: Rc::new(RefCell::new(EventManager::new())),
+            resources: Rc::new(RefCell::new(ResourceManager::new())),
         };
         world.event_manager.borrow_mut().set_world(&world);
         world
@@ -70,6 +67,10 @@ impl World {
         self.entity_manager.as_ptr()
     }
 
+    pub(crate) unsafe fn get_entity_manager_mut(&self) -> *mut EntityManager {
+        self.entity_manager.as_ptr() as *mut EntityManager
+    }
+
     pub fn add_system<P>(&self, system: impl IntoSystem<P>) {
         self.system_manager.borrow_mut().add_system(system);
     }
@@ -93,5 +94,18 @@ impl World {
 
     pub(crate) unsafe fn get_event_manager(&self) -> *const EventManager {
         self.event_manager.as_ptr()
+    }
+
+    pub fn add_resource<T: 'static>(&self, resource: T) {
+        self.resources.borrow_mut().add(resource);
+    }
+
+    pub fn get_resource<T: 'static>(&self) -> Option<Resource<T>> {
+        self.resources.borrow().get_resource::<T>()
+    }
+
+
+    pub(crate) unsafe fn get_resource_manager(&self) -> *const ResourceManager {
+        self.resources.as_ptr()
     }
 }

@@ -18,6 +18,12 @@ impl<'a> SystemParam<'a> for &EntityManager {
     }
 }
 
+impl<'a> SystemParam<'a> for &mut EntityManager { 
+    fn get_param(world: &'a super::world::World) -> Self {
+        unsafe { &mut (*world.get_entity_manager_mut()) }
+    }
+}
+
 impl EntityManager {
     pub fn new() -> Self {
         EntityManager {

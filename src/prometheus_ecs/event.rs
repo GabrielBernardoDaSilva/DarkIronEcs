@@ -39,19 +39,19 @@ impl<T: 'static> AsAny for EventHandler<T> {
 
 pub struct EventManager {
     pub events: HashMap<TypeId, Box<dyn EventTrait>>,
-    pub world: *const World,
+    pub world: std::ptr::NonNull<World>,
 }
 
 impl EventManager {
     pub fn new() -> Self {
         EventManager {
             events: HashMap::new(),
-            world: std::ptr::null(),
+            world: std::ptr::NonNull::dangling(),
         }
     }
 
     pub fn set_world(&mut self, world: *const World) {
-        self.world = world;
+        self.world = std::ptr::NonNull::new(world as *mut World).unwrap();
     }
 
     pub fn subscribe<T: 'static>(&mut self, event: EventHandler<T>) {
@@ -64,7 +64,11 @@ impl EventManager {
             Some(event) => {
                 let event_handler = event.as_any().downcast_ref::<EventHandler<T>>().unwrap();
                 unsafe {
-                    event_handler.call(&*self.world, t);
+                    if self.world == std::ptr::NonNull::dangling() {
+                        panic!("World is not set in EventManager");
+                    }
+                    let world = self.world.as_ref();
+                    event_handler.call(world, t);
                 }
             }
             None => {}

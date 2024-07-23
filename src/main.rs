@@ -1,11 +1,7 @@
 #![allow(dead_code)]
 
 use prometheus_ecs::{
-    entity_manager::EntityManager,
-    event::EventManager,
-    query::{Query, Without},
-    system::{IntoSystem, System, SystemManager},
-    world::World,
+    entity_manager::EntityManager, event::EventManager, query::{Query, Without}, resources::Resource, system::{IntoSystem, System, SystemManager}, world::World
 };
 
 pub mod prometheus_ecs;
@@ -20,25 +16,35 @@ struct Name(String);
 #[derive(Debug)]
 struct Health(i32);
 
-fn test_system(q: Query<(&Health,)>) {
+fn test_system(q: Query<(&Health,)>, entity_manager: &mut EntityManager) {
     println!("{:?}", q.components);
     for health in q.components {
         println!("{:?}", health);
     }
+
+    
 }
 
 fn test_system_1(
     q: Query<(&Health,)>,
     q2: Query<(&Health,), Without<(&Name,)>>,
     entity_manager: &EntityManager,
+    camera: Resource<Camera>
 ) {
     println!("{:?}", q.components);
     println!("{:?}", q2.components);
     println!("{:?}", entity_manager.archetypes);
     println!("Hello from test_system_1");
+    println!("{:?} {:?} {:?}", camera.x, camera.y, camera.z);
 }
 
 struct CollisionEvent;
+
+struct Camera{
+    x: f32,
+    y: f32,
+    z: f32,
+}
 
 fn main() {
     let mut world = prometheus_ecs::world::World::new();
@@ -56,6 +62,8 @@ fn main() {
         Name("Enemy 3".to_string()),
         Health(300),
     ));
+
+    world.add_resource(Camera { x: 1000.0, y: 0.0, z: 0.0 });
 
 
     world.create_entity((Position { x: 2.0, y: 2.0 }, Health(400)));
