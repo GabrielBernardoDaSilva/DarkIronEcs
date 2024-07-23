@@ -18,7 +18,7 @@ impl<'a> SystemParam<'a> for &EntityManager {
     }
 }
 
-impl<'a> SystemParam<'a> for &mut EntityManager { 
+impl<'a> SystemParam<'a> for &mut EntityManager {
     fn get_param(world: &'a super::world::World) -> Self {
         unsafe { &mut (*world.get_entity_manager_mut()) }
     }
@@ -68,15 +68,20 @@ impl EntityManager {
         let entity = self.entities.iter().find(|ent| ent.id == entity.id);
         match entity {
             Some(entity) => {
-                let archetype = &mut self.archetypes[entity.entity_location];
+                let location = entity.entity_location;
+                let archetype = &mut self.archetypes[location];
                 let type_id = std::any::TypeId::of::<T>();
                 let mut entity_with_components = archetype
                     .migrate_entity_to_other_archetype(entity.id)
                     .unwrap();
                 entity_with_components.1.remove(&type_id);
 
+                if archetype.is_empty() {
+                    self.archetypes.remove(location);
+                }
+
                 if entity_with_components.1.len() == 0 {
-                    self.entities.remove(entity.entity_location);
+                    self.entities.remove(location);
                 } else {
                     self.move_entity_to_other_archetype(*entity, entity_with_components.1);
                 }
@@ -102,6 +107,10 @@ impl EntityManager {
                     .1
                     .insert(type_id, Box::new(RefCell::new(component)));
 
+                if archetype.is_empty() {
+                    self.archetypes.remove(entity.entity_location);
+                }
+
                 self.move_entity_to_other_archetype(*entity, entity_with_components.1);
             }
             None => {}
@@ -114,6 +123,9 @@ impl EntityManager {
             Some(entity) => {
                 let archetype = &mut self.archetypes[entity.entity_location];
                 archetype.remove_entity(entity.id).unwrap();
+                if archetype.is_empty() {
+                    self.archetypes.remove(entity.entity_location);
+                }
                 self.entities.remove(entity.entity_location);
             }
             None => {}

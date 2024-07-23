@@ -92,6 +92,10 @@ impl Archetype {
     pub fn has_type(&self, type_id: std::any::TypeId) -> bool {
         self.components.contains_key(&type_id)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.entities.is_empty()
+    }
 }
 
 #[test]

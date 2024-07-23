@@ -1,13 +1,10 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+use std::future::IntoFuture;
+
 use prometheus_ecs::{
-    entity_manager::EntityManager,
-    event::EventManager,
-    query::{Query, Without},
-    resources::Resource,
-    system::{IntoSystem, System, SystemManager, SystemSchedule},
-    world::World,
+    entity, entity_manager::EntityManager, event::EventManager, query::{Query, Without}, resources::Resource, system::{IntoSystem, System, SystemManager, SystemSchedule}, world::World
 };
 
 pub mod prometheus_ecs;
@@ -37,6 +34,7 @@ fn test_system_1(
     entity_manager: &EntityManager,
     camera: Resource<Camera>,
 ) {
+    
     println!("{:?}", q.components.iter());
     println!("{:?}", q2.components.iter());
     println!("{:?}", entity_manager.archetypes);
@@ -52,6 +50,7 @@ struct Camera {
     z: f32,
 }
 
+
 fn main() {
     let mut world = prometheus_ecs::world::World::new();
 
@@ -63,11 +62,16 @@ fn main() {
 
     world.create_entity((Name("Enemy 2".to_string()), Health(200)));
 
-    world.create_entity((
+    let entity = world.create_entity((
         Position { x: 0.0, y: 0.0 },
         Name("Enemy 3".to_string()),
         Health(300),
     ));
+
+    world.remove_component::<Health>(entity);
+
+    world.add_component_to_entity(entity, Health(400));
+
 
     world.add_resource(Camera {
         x: 1000.0,
