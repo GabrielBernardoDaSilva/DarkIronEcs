@@ -52,3 +52,6 @@ fn main() {
     let duration = start.elapsed();
     println!("Time elapsed in building world: {:?}", duration);
 }
+
+
+// Time elapsed in building world: 121.1069256s

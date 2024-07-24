@@ -110,7 +110,7 @@ macro_rules! impl_query_params {
             type QueryResult = ($head::Result, $($tail::Result),+);
 
             fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
-                ($head::fetch(archetype, 0), $($tail::fetch(archetype, entity_location)),+)
+                ($head::fetch(archetype, entity_location), $($tail::fetch(archetype, entity_location)),+)
             }
             fn types_id() -> Vec<TypeId> {
                 let mut types = Vec::new();
