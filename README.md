@@ -1,10 +1,10 @@
-# Dark Iron ECS Example Project
+# Dark Iron ECS
 
 <p align="center">
       <img src="https://github.com/GabrielBernardoDaSilva/DarkIronEcs/blob/master/darkiron.png" alt="Dark Iron" />
 </p>
 
-This project demonstrates how to use the `dark_iron_ecs` library to create an Entity Component System (ECS) in Rust. The example includes creating components, querying entities, and setting up systems to interact with those components.
+
 
 ## Features
 
@@ -14,6 +14,9 @@ This project demonstrates how to use the `dark_iron_ecs` library to create an En
 - **Queries**: Efficiently query entities based on their components.
 - **Systems**: Implement game logic and behaviors through systems that process entities based on queries.
 - **Plugins**: Extend the functionality of the ECS with custom plugins.
+
+## Example 
+Demonstrates how to use the `dark_iron_ecs` library to create an Entity Component System (ECS) in Rust. The example includes creating components, querying entities, and setting up systems to interact with those components.
 
 ## Setup
 
