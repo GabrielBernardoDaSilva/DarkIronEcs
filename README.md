@@ -24,7 +24,7 @@ First, add the `dark_iron_ecs` dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dark_iron_ecs = "0.1.0"  # Replace with the actual version
+dark_iron_ecs = "0.5.0"  # Replace with the actual version
 ```
 
 ### Imports
