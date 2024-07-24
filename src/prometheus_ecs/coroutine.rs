@@ -1,7 +1,4 @@
-use super::{
-    system::SystemParam,
-    world::{self, World},
-};
+use super::{system::SystemParam, world::World};
 
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub struct WaitAmountOfSeconds {

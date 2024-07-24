@@ -6,7 +6,6 @@ use super::{
     error::ArchetypeError,
 };
 
-#[derive(Debug)]
 pub struct Archetype {
     pub components: HashMap<std::any::TypeId, ComponentList>,
     pub entities: Vec<EntityId>,
@@ -25,7 +24,12 @@ impl Archetype {
     pub fn new_from_migration(entity_id: EntityId, components: MovedEntity) -> Self {
         let mut components_map = HashMap::new();
         for (type_id, component) in components {
-            components_map.insert(type_id, ComponentList { components: vec![component] });
+            components_map.insert(
+                type_id,
+                ComponentList {
+                    components: vec![component],
+                },
+            );
         }
         Self {
             components: components_map,
@@ -51,7 +55,6 @@ impl Archetype {
                 .or_insert_with(ComponentList::new)
                 .components
                 .push(component);
-
         }
         self.entities.push(entity_id);
     }
@@ -112,11 +115,8 @@ fn test_archetype() {
 
     let mut arch = Archetype::new(0, (Health(100), Position(0, 0), Velocity(0, 0)));
     arch.add_entity(1, (Health(200), Position(1, 1), Velocity(1, 1)));
-    println!("{:?}", arch.components);
 
     let (entity_id, moved_entity) = arch.migrate_entity_to_other_archetype(0).unwrap();
-    println!("entity {:?}", entity_id);
-    println!("{:?}", moved_entity);
-
-    println!("{:?}", arch.components);
+    assert_eq!(entity_id, 0);
+    assert_eq!(moved_entity.len(), 3);
 }

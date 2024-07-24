@@ -1,6 +1,6 @@
 pub type EntityId = u32;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Entity {
     pub id: EntityId,
     pub entity_location: usize,

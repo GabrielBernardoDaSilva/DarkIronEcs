@@ -1,7 +1,7 @@
 use super::archetype::Archetype;
 use crate::prometheus_ecs::system::SystemParam;
 use crate::prometheus_ecs::world::World;
-use std::{any::TypeId, fmt::Debug};
+use std::any::TypeId;
 
 pub trait QueryParams<'a> {
     type QueryResult;
@@ -53,7 +53,7 @@ pub trait Fetch<'a> {
     fn get_type_id() -> TypeId;
 }
 
-impl<'a, T: 'static + Debug> Fetch<'a> for &mut T {
+impl<'a, T: 'static> Fetch<'a> for &mut T {
     type Result = Self;
     fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Self::Result {
         let type_id = TypeId::of::<T>();
@@ -71,16 +71,10 @@ impl<'a, T: 'static + Debug> Fetch<'a> for &mut T {
     }
 }
 
-impl<'a, T: 'static + Debug> Fetch<'a> for &T {
+impl<'a, T: 'static> Fetch<'a> for &T {
     type Result = Self;
     fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Self::Result {
         let type_id = TypeId::of::<T>();
-        println!(
-            "comp name: {:?}, comp id: {:?}, entity {:?}",
-            std::any::type_name::<T>(),
-            type_id,
-            entity_id
-        );
         let res = archetypes.components.get(&type_id).unwrap();
         let c: &mut T = res.get_mut(entity_id as usize).unwrap();
         return unsafe {
@@ -96,7 +90,7 @@ impl<'a, T: 'static + Debug> Fetch<'a> for &T {
 
 macro_rules! impl_query_params {
     ( $head:ident ) => {
-        impl<'a, $head: Fetch<'a> + Debug + 'static> QueryParams<'a> for ($head,) {
+        impl<'a, $head: Fetch<'a> + 'static> QueryParams<'a> for ($head,) {
             type QueryResult = $head::Result;
 
             fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
@@ -112,7 +106,7 @@ macro_rules! impl_query_params {
 
     };
     ( $head:ident, $($tail:ident),+ ) => {
-        impl<'a, $head: Fetch<'a> + Debug + 'static, $($tail: Fetch<'a> + Debug + 'static),+> QueryParams<'a> for ($head, $($tail),+) {
+        impl<'a, $head: Fetch<'a>  + 'static, $($tail: Fetch<'a>  + 'static),+> QueryParams<'a> for ($head, $($tail),+) {
             type QueryResult = ($head::Result, $($tail::Result),+);
 
             fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
@@ -135,14 +129,14 @@ impl_query_params!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U
 
 macro_rules! impl_query_constrains {
     ( $head:ident ) => {
-        impl<$head: for<'a> Fetch<'a> + Debug + 'static > Constraints for ($head,) {
+        impl<$head: for<'a> Fetch<'a>  + 'static > Constraints for ($head,) {
             fn constraint_types() -> Vec<TypeId> {
                 vec![<$head>::get_type_id()]
             }
         }
     };
     ( $head:ident, $($tail:ident),+ ) => {
-        impl<$head: for<'a> Fetch<'a> + Debug + 'static, $($tail: for<'a> Fetch<'a> + Debug + 'static),+> Constraints for ($head, $($tail),+) {
+        impl<$head: for<'a> Fetch<'a>  + 'static, $($tail: for<'a> Fetch<'a> + 'static),+> Constraints for ($head, $($tail),+) {
             fn constraint_types() -> Vec<TypeId> {
                 vec![<$head>::get_type_id(), $($tail::get_type_id()),+]
             }
@@ -214,6 +208,7 @@ fn query_test() {
     #[allow(dead_code)]
     pub struct Velocity(i32, i32);
     #[derive(Debug)]
+    #[allow(dead_code)]
     pub struct Name(String);
 
     let mut arch = Archetype::new(0, (Health(100), Position(0, 0), Velocity(0, 0)));

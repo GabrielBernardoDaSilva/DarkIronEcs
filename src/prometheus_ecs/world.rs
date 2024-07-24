@@ -1,8 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, pin::Pin, rc::Rc};
 
 use super::{
     component::{BundleComponent, Component},
-    coroutine::{self, Coroutine, CoroutineManager},
+    coroutine::{Coroutine, CoroutineManager},
     entity::Entity,
     entity_manager::EntityManager,
     event::{EventHandler, EventManager},
@@ -12,21 +12,21 @@ use super::{
 };
 
 pub struct World {
-    pub entity_manager: Rc<RefCell<EntityManager>>,
-    pub system_manager: Rc<RefCell<SystemManager>>,
-    pub event_manager: Rc<RefCell<EventManager>>,
-    pub resources: Rc<RefCell<ResourceManager>>,
-    pub coroutine_manager: Rc<RefCell<CoroutineManager>>,
+    pub entity_manager: Pin<Rc<RefCell<EntityManager>>>,
+    pub system_manager: Pin<Rc<RefCell<SystemManager>>>,
+    pub event_manager: Pin<Rc<RefCell<EventManager>>>,
+    pub resources: Pin<Rc<RefCell<ResourceManager>>>,
+    pub coroutine_manager: Pin<Rc<RefCell<CoroutineManager>>>,
 }
 
 impl World {
     pub fn new() -> Self {
         let world = Self {
-            entity_manager: Rc::new(RefCell::new(EntityManager::new())),
-            system_manager: Rc::new(RefCell::new(SystemManager::new())),
-            event_manager: Rc::new(RefCell::new(EventManager::new())),
-            resources: Rc::new(RefCell::new(ResourceManager::new())),
-            coroutine_manager: Rc::new(RefCell::new(CoroutineManager::new())),
+            entity_manager: Pin::new(Rc::new(RefCell::new(EntityManager::new()))),
+            system_manager: Pin::new(Rc::new(RefCell::new(SystemManager::new()))),
+            event_manager: Pin::new(Rc::new(RefCell::new(EventManager::new()))),
+            resources: Pin::new(Rc::new(RefCell::new(ResourceManager::new()))),
+            coroutine_manager: Pin::new(Rc::new(RefCell::new(CoroutineManager::new()))),
         };
         world.event_manager.borrow_mut().set_world(&world);
         world
@@ -83,10 +83,6 @@ impl World {
             .borrow_mut()
             .add_system(system_scheduler, system);
     }
-    // pub fn add_systems<P: 'static>(&self, system_scheduler: SystemSchedule, systems: impl SystemBundle<P>) {
-    //     let system_manager = unsafe { &mut (*self.get_system_manager_mut()) };
-    //     systems.add_systems(system_scheduler, system_manager);
-    // }
 
     pub fn add_systems<P: 'static>(
         &self,
@@ -98,9 +94,16 @@ impl World {
 
         self
     }
+    pub fn run_startup(&self) {
+        self.system_manager.borrow_mut().run_startup_systems(self);
+    }
 
     pub fn run_update(&self) {
         self.system_manager.borrow_mut().run_update_systems(self);
+    }
+
+    pub fn run_shutdown(&self) {
+        self.system_manager.borrow_mut().run_shutdown_systems(self);
     }
 
     pub(crate) unsafe fn get_system_manager(&self) -> *const SystemManager {
@@ -168,6 +171,4 @@ impl World {
     pub(crate) unsafe fn get_coroutine_manager_mut(&self) -> *mut CoroutineManager {
         self.coroutine_manager.as_ptr() as *mut CoroutineManager
     }
-
-
 }

@@ -1,17 +1,17 @@
-use std::{cell::RefCell, collections::HashMap, fmt::Debug};
+use std::{cell::RefCell, collections::HashMap};
 
 use super::entity::EntityId;
 
-pub trait Component: Debug {}
+pub trait Component {}
 pub trait BundleComponent {
     fn create_map_components(self, entity_id: EntityId)
         -> HashMap<std::any::TypeId, ComponentList>;
     fn get_types_id(&self) -> Vec<std::any::TypeId>;
 }
 
-impl<T: Debug> Component for T {}
+impl<T> Component for T {}
 
-#[derive(Debug)]
+
 pub struct ComponentList {
     pub components: Vec<Box<RefCell<dyn Component>>>,
 }
@@ -59,7 +59,7 @@ impl ComponentList {
 macro_rules! impl_bundle_component {
     // Base case: Implement for a single element tuple
     ( $head:ident ) => {
-        impl< $head: 'static + Debug > BundleComponent for ($head,) {
+        impl< $head: 'static > BundleComponent for ($head,) {
             fn create_map_components(self, entity_id: EntityId) -> HashMap<std::any::TypeId, ComponentList> {
                 let mut map = HashMap::new();
                 let mut component_list = ComponentList::new();
@@ -82,7 +82,7 @@ macro_rules! impl_bundle_component {
     // Recursive case: Implement for tuples with more than one element
     ( $head:ident, $($tail:ident),+ ) => {
         impl_bundle_component!($($tail),+);
-        impl< $head: 'static + Debug, $($tail: 'static + Debug),* > BundleComponent for ($head, $($tail),*) {
+        impl< $head: 'static, $($tail: 'static ),* > BundleComponent for ($head, $($tail),*) {
 
             #[allow(non_snake_case)]
             #[allow(unused_variables)]
@@ -114,7 +114,7 @@ impl_bundle_component!(
 
 #[test]
 fn test() {
-    #[derive(Debug)]
+
     struct Health(i32);
     let mut component_list = ComponentList::new();
     component_list.add(Health(100));
