@@ -6,6 +6,7 @@ use super::{
     entity::Entity,
     entity_manager::EntityManager,
     event::{EventHandler, EventManager},
+    extension::Extension,
     query::{Query, QueryConstraint, QueryParams},
     resources::{Resource, ResourceManager},
     system::{IntoSystem, SystemBundle, SystemManager, SystemSchedule},
@@ -17,6 +18,7 @@ pub struct World {
     pub event_manager: Pin<Rc<RefCell<EventManager>>>,
     pub resources: Pin<Rc<RefCell<ResourceManager>>>,
     pub coroutine_manager: Pin<Rc<RefCell<CoroutineManager>>>,
+    pub extensions: Pin<Rc<RefCell<Vec<Box<dyn Extension>>>>>,
 }
 
 impl World {
@@ -27,6 +29,7 @@ impl World {
             event_manager: Pin::new(Rc::new(RefCell::new(EventManager::new()))),
             resources: Pin::new(Rc::new(RefCell::new(ResourceManager::new()))),
             coroutine_manager: Pin::new(Rc::new(RefCell::new(CoroutineManager::new()))),
+            extensions: Pin::new(Rc::new(RefCell::new(Vec::new()))),
         };
         world.event_manager.borrow_mut().set_world(&world);
         world
@@ -170,5 +173,17 @@ impl World {
 
     pub(crate) unsafe fn get_coroutine_manager_mut(&self) -> *mut CoroutineManager {
         self.coroutine_manager.as_ptr() as *mut CoroutineManager
+    }
+
+    pub fn add_extension<T: Extension + 'static>(&mut self, extension: T) {
+        let extensions = self.extensions.clone();
+        extensions.borrow_mut().push(Box::new(extension));
+    }
+
+    pub fn build(&mut self) {
+        let extensions = self.extensions.clone();
+        for extension in extensions.borrow().iter() {
+            extension.build(self);
+        }
     }
 }

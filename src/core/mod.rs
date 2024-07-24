@@ -10,3 +10,4 @@ pub mod event;
 pub mod resources;
 pub mod coroutine;
 pub mod as_any_trait;
+pub mod extension;

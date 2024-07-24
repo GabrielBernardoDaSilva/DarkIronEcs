@@ -1,4 +1,12 @@
-use dark_iron_ecs::core::{coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds}, entity_manager::EntityManager, query::{Query, Without}, resources::Resource, system::SystemSchedule, world::World};
+use dark_iron_ecs::core::{
+    coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds},
+    entity_manager::EntityManager,
+    extension::Extension,
+    query::{Query, Without},
+    resources::Resource,
+    system::SystemSchedule,
+    world::World,
+};
 
 struct Position {
     x: f32,
@@ -40,6 +48,13 @@ struct Camera {
     x: f32,
     y: f32,
     z: f32,
+}
+
+pub struct ExtensionExample;
+impl Extension for ExtensionExample {
+    fn build(&self, world: &mut World) {
+        world.create_entity((Health(100),));
+    }
 }
 
 fn main() {
@@ -97,7 +112,9 @@ fn main() {
     world.run_update();
 
     world.publish_event(CollisionEvent);
-
+    world.add_extension(ExtensionExample);
+    
+    world.build();
     world.run_startup();
     loop {
         world.run_update();
