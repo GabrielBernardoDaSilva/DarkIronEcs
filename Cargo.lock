@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "another_ecs"
-version = "0.1.0"
+name = "dark_iron_ecs"
+version = "0.5.0"

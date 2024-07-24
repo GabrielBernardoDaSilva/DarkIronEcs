@@ -1,6 +1,6 @@
 use super::archetype::Archetype;
-use crate::prometheus_ecs::system::SystemParam;
-use crate::prometheus_ecs::world::World;
+use crate::core::system::SystemParam;
+use crate::core::world::World;
 use std::any::TypeId;
 
 pub trait QueryParams<'a> {

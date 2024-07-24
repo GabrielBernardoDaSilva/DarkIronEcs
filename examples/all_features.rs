@@ -1,13 +1,4 @@
-use prometheus_ecs::{
-    coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds},
-    entity_manager::EntityManager,
-    query::{Query, Without},
-    resources::Resource,
-    system::SystemSchedule,
-    world::World,
-};
-
-pub mod prometheus_ecs;
+use dark_iron_ecs::core::{coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds}, entity_manager::EntityManager, query::{Query, Without}, resources::Resource, system::SystemSchedule, world::World};
 
 struct Position {
     x: f32,
@@ -28,7 +19,7 @@ fn test_system(q: Query<(&Health,)>, entity_manager: &mut EntityManager) {
 fn test_system_1(
     q: Query<(&Health,)>,
     q2: Query<(&Health,), Without<(&Name,)>>,
-    camera: Resource<Camera>,
+    mut camera: Resource<Camera>,
 ) {
     for health in q.iter() {
         println!("q {:?}", health.0);
@@ -39,6 +30,7 @@ fn test_system_1(
     }
 
     println!("Hello from test_system_1");
+    camera.x += 1.0;
     println!("{:?} {:?} {:?}", camera.x, camera.y, camera.z);
 }
 
@@ -51,7 +43,7 @@ struct Camera {
 }
 
 fn main() {
-    let mut world = prometheus_ecs::world::World::new();
+    let mut world = World::new();
 
     world.subscribe_event(|_world: &World, _t: CollisionEvent| {
         println!("Collision Event Hit");

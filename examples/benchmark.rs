@@ -1,8 +1,5 @@
-use prometheus_ecs::{
-    entity_manager::EntityManager, query::Query, system::SystemSchedule, world::World,
-};
+use dark_iron_ecs::core::{entity_manager::EntityManager, query::Query, system::SystemSchedule, world::World};
 
-pub mod prometheus_ecs;
 
 struct Position {
     x: f32,
@@ -52,3 +49,6 @@ fn main() {
     let duration = start.elapsed();
     println!("Time elapsed in building world: {:?}", duration);
 }
+
+
+// Time elapsed in building world: 121.1069256s
