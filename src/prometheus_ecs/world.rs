@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use super::{
     component::{BundleComponent, Component},
+    coroutine::{self, Coroutine, CoroutineManager},
     entity::Entity,
     entity_manager::EntityManager,
     event::{EventHandler, EventManager},
@@ -15,6 +16,7 @@ pub struct World {
     pub system_manager: Rc<RefCell<SystemManager>>,
     pub event_manager: Rc<RefCell<EventManager>>,
     pub resources: Rc<RefCell<ResourceManager>>,
+    pub coroutine_manager: Rc<RefCell<CoroutineManager>>,
 }
 
 impl World {
@@ -24,6 +26,7 @@ impl World {
             system_manager: Rc::new(RefCell::new(SystemManager::new())),
             event_manager: Rc::new(RefCell::new(EventManager::new())),
             resources: Rc::new(RefCell::new(ResourceManager::new())),
+            coroutine_manager: Rc::new(RefCell::new(CoroutineManager::new())),
         };
         world.event_manager.borrow_mut().set_world(&world);
         world
@@ -96,7 +99,6 @@ impl World {
         self
     }
 
-
     pub fn run_update(&self) {
         self.system_manager.borrow_mut().run_update_systems(self);
     }
@@ -141,4 +143,31 @@ impl World {
     pub(crate) unsafe fn get_resource_manager_mut(&self) -> *mut ResourceManager {
         self.resources.as_ptr() as *mut ResourceManager
     }
+
+    pub fn add_coroutine(&self, coroutine: Coroutine) {
+        self.coroutine_manager.borrow_mut().add_coroutine(coroutine);
+    }
+
+    pub fn stop_all_coroutines(&self) {
+        self.coroutine_manager.borrow_mut().stop_all();
+    }
+
+    pub fn stop_coroutine_by_name(&self, name: &str) {
+        self.coroutine_manager.borrow_mut().stop_by_name(name);
+    }
+
+    pub fn update_coroutines(&mut self, delta_time: f32) {
+        let coroutine_manager = self.coroutine_manager.clone();
+        coroutine_manager.borrow_mut().update(self, delta_time);
+    }
+
+    pub(crate) unsafe fn get_coroutine_manager(&self) -> *const CoroutineManager {
+        self.coroutine_manager.as_ptr()
+    }
+
+    pub(crate) unsafe fn get_coroutine_manager_mut(&self) -> *mut CoroutineManager {
+        self.coroutine_manager.as_ptr() as *mut CoroutineManager
+    }
+
+
 }
