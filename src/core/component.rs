@@ -31,8 +31,8 @@ impl ComponentList {
         match component {
             Some(component) => {
                 let ptr = component.get();
-                let ptr = ptr as *const T;
-                unsafe { Some(&*ptr) }
+                let ptr = ptr.cast::<T>();
+                unsafe { ptr.as_ref() }
             }
             None => None,
         }
@@ -43,8 +43,8 @@ impl ComponentList {
         match component {
             Some(component) => {
                 let ptr = component.get();
-                let ptr = ptr as *mut T;
-                unsafe { Some(&mut *ptr) }
+                let ptr = ptr.cast::<T>();
+                unsafe { ptr.as_mut() }
             }
             None => None,
         }
