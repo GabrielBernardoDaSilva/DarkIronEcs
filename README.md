@@ -1,7 +1,7 @@
 # Dark Iron ECS
 
 <p align="center">
-      ![Dark Iron](logo/darkiron.png)
+      ![Dark Iron](https://raw.githubusercontent.com/GabrielBernardoDaSilva/DarkIronEcs/master/logo/darkiron.png)
 </p>
 
 
