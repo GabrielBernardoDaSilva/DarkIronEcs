@@ -1,7 +1,7 @@
 # Dark Iron ECS
 
 <p align="center">
-      <img src="https://github.com/GabrielBernardoDaSilva/DarkIronEcs/blob/c0b8688580b8aaba8e1ce2557254295fa551fb97/darkiron.png" alt="Dark Iron" />
+      <img src="darkiron.png" alt="Dark Iron" />
 </p>
 
 
