@@ -8,6 +8,9 @@ pub struct Entity {
 
 impl Entity {
     pub(crate) fn new(id: EntityId, entity_location: usize) -> Self {
-        Entity { id, entity_location }
+        Entity {
+            id,
+            entity_location,
+        }
     }
 }

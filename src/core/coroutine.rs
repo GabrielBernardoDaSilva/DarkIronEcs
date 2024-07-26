@@ -114,6 +114,12 @@ impl CoroutineManager {
     }
 }
 
+impl Default for CoroutineManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> SystemParam<'a> for &CoroutineManager {
     fn get_param(world: &'a World) -> Self {
         unsafe {

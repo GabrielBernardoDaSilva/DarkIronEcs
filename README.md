@@ -10,10 +10,10 @@
 
 - **Entity Creation**: Easily create entities and attach components to them.
 - **Event Handling**: Implement event-driven architecture with custom events and event handlers.
-- **Coroutines**: Schedule tasks to be executed at specific intervals or delays.
+- **Coroutines**: Create a coroutine to be executed at specific intervals or delays.
 - **Queries**: Efficiently query entities based on their components.
 - **Systems**: Implement game logic and behaviors through systems that process entities based on queries.
-- **Plugins**: Extend the functionality of the ECS with custom plugins.
+- **Extensions**: Extend the functionality of the ECS with custom extensions.
 
 ## Example 
 Demonstrates how to use the `dark_iron_ecs` library to create an Entity Component System (ECS) in Rust. The example includes creating components, querying entities, and setting up systems to interact with those components.
@@ -34,6 +34,7 @@ For this example the necessary imports:
 use dark_iron_ecs::core::{
     coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds},
     entity_manager::EntityManager,
+    extension::Extension,
     query::{Query, Without},
     resources::Resource,
     system::SystemSchedule,

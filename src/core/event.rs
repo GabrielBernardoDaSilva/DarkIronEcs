@@ -5,8 +5,10 @@ use std::{
 
 use super::{as_any_trait::AsAny, system::SystemParam, world::World};
 
+type EventFunction<T> = Box<dyn Fn(&World, T)>;
+
 pub struct EventHandler<T> {
-    pub func: Box<dyn Fn(&World, T)>,
+    pub func: EventFunction<T>,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -59,19 +61,17 @@ impl EventManager {
     }
 
     pub fn publish<T: 'static>(&mut self, t: T) {
-        let event = self.events.get_mut(&TypeId::of::<T>());
-        match event {
-            Some(event) => {
-                let event_handler = event.as_any().downcast_ref::<EventHandler<T>>().unwrap();
-                unsafe {
-                    if self.world == std::ptr::NonNull::dangling() {
-                        panic!("World is not set in EventManager");
-                    }
-                    let world = self.world.as_ref();
-                    event_handler.call(world, t);
+        let event_opt = self.events.get_mut(&TypeId::of::<T>());
+
+        if let Some(event) = event_opt {
+            let event_handler = event.as_any().downcast_ref::<EventHandler<T>>().unwrap();
+            unsafe {
+                if self.world == std::ptr::NonNull::dangling() {
+                    panic!("World is not set in EventManager");
                 }
+                let world = self.world.as_ref();
+                event_handler.call(world, t);
             }
-            None => {}
         }
     }
 }
@@ -85,5 +85,11 @@ impl<'a> SystemParam<'a> for &EventManager {
 impl<'a> SystemParam<'a> for &mut EventManager {
     fn get_param(world: &'a World) -> Self {
         unsafe { &mut (*world.get_event_manager_mut()) }
+    }
+}
+
+impl Default for EventManager {
+    fn default() -> Self {
+        Self::new()
     }
 }

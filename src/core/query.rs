@@ -59,10 +59,10 @@ impl<'a, T: 'static> Fetch<'a> for &mut T {
 
         let res = archetypes.components.get(&type_id).unwrap();
         let c: &mut T = res.get_mut(entity_id as usize).unwrap();
-        return unsafe {
+        unsafe {
             let ptr = c as *mut T;
             &mut *ptr
-        };
+        }
     }
 
     fn get_type_id() -> TypeId {
@@ -76,10 +76,10 @@ impl<'a, T: 'static> Fetch<'a> for &T {
         let type_id = TypeId::of::<T>();
         let res = archetypes.components.get(&type_id).unwrap();
         let c: &mut T = res.get_mut(entity_id as usize).unwrap();
-        return unsafe {
+        unsafe {
             let ptr = c as *mut T;
             &mut *ptr
-        };
+        }
     }
 
     fn get_type_id() -> TypeId {
@@ -112,9 +112,7 @@ macro_rules! impl_query_params {
                 ($head::fetch(archetype, entity_location), $($tail::fetch(archetype, entity_location)),+)
             }
             fn types_id() -> Vec<TypeId> {
-                let mut types = Vec::new();
-                types.push(<$head>::get_type_id());
-                $(types.push(<$tail>::get_type_id());)+
+                let types = vec![<$head>::get_type_id(), $($tail::get_type_id()),+];
                 types
             }
         }
@@ -184,7 +182,7 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
                 }
             }
         }
-        return components;
+        components
     }
 }
 
@@ -192,7 +190,7 @@ impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam<
     for Query<'a, T, Constraint>
 {
     fn get_param(world: &'a World) -> Self {
-       Query::<T, Constraint>::new(world)
+        Query::<T, Constraint>::new(world)
     }
 }
 
@@ -210,5 +208,4 @@ fn query_test() {
     #[derive(Debug)]
     #[allow(dead_code)]
     pub struct Name(String);
-
 }

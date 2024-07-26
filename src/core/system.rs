@@ -75,8 +75,12 @@ macro_rules! impl_system {
 
 impl_system!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
+
+
+type SystemFunctionMap = HashMap<SystemSchedule, Vec<Box<dyn FnMut(&World)>>>;
+
 pub struct SystemManager {
-    pub systems: HashMap<SystemSchedule, Vec<Box<dyn FnMut(&World)>>>,
+    pub systems: SystemFunctionMap,
 }
 
 impl SystemManager {
@@ -92,7 +96,7 @@ impl SystemManager {
     {
         self.systems
             .entry(system_schedule)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(system.system());
     }
 
@@ -131,11 +135,11 @@ pub trait SystemBundle<P> {
     fn add_systems(self, system_schedule: SystemSchedule, system_manager: &mut SystemManager);
 }
 
-// impl<P: 'static, A: IntoSystem<P>> SystemBundle<P> for (A,) {
-//     fn add_systems(self, system_schedule: SystemSchedule, system_manager: &mut SystemManager) {
-//         system_manager.add_system(system_schedule, self.0);
-//     }
-// }
+impl Default for SystemManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 macro_rules! impl_system_bundle {
 

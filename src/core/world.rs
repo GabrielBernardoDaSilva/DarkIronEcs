@@ -35,14 +35,20 @@ impl World {
         world
     }
 
-    pub fn create_entity(&mut self, components: impl BundleComponent) -> Entity {
+    pub fn create_entity(&mut self, components: impl BundleComponent) -> &mut Self {
+        self.entity_manager.borrow_mut().create_entity(components);
+        self
+    }
+
+    pub fn create_entity_with_id(&mut self, components: impl BundleComponent) -> Entity {
         self.entity_manager.borrow_mut().create_entity(components)
     }
 
-    pub fn remove_component<T: 'static + Component>(&mut self, entity: Entity) {
+    pub fn remove_component<T: 'static + Component>(&mut self, entity: Entity) -> &mut Self {
         self.entity_manager
             .borrow_mut()
             .remove_component::<T>(entity);
+        self
     }
 
     pub fn add_component_to_entity<T: 'static + Component>(
@@ -74,27 +80,32 @@ impl World {
     }
 
     pub(crate) unsafe fn get_entity_manager_mut(&self) -> *mut EntityManager {
-        self.entity_manager.as_ptr() as *mut EntityManager
+        self.entity_manager.as_ptr()
     }
 
-    pub fn add_system<P>(&self, system_scheduler: SystemSchedule, system: impl IntoSystem<P>) {
+    pub fn add_system<P>(
+        &mut self,
+        system_scheduler: SystemSchedule,
+        system: impl IntoSystem<P>,
+    ) -> &mut Self {
         self.system_manager
             .borrow_mut()
             .add_system(system_scheduler, system);
+        self
     }
 
     pub fn add_systems<P: 'static>(
-        &self,
+        &mut self,
         action: SystemSchedule,
         systems: impl SystemBundle<P>,
-    ) -> &Self {
+    ) -> &mut Self {
         let system_manager = unsafe { &mut (*self.get_system_manager_mut()) };
         systems.add_systems(action, system_manager);
-
         self
     }
-    pub fn run_startup(&self) {
+    pub fn run_startup(&self) -> &Self {
         self.system_manager.borrow_mut().run_startup_systems(self);
+        self
     }
 
     pub fn run_update(&self) {
@@ -110,7 +121,7 @@ impl World {
     }
 
     pub(crate) unsafe fn get_system_manager_mut(&self) -> *mut SystemManager {
-        self.system_manager.as_ptr() as *mut SystemManager
+        self.system_manager.as_ptr()
     }
 
     pub fn publish_event<T: 'static>(&self, event: T) {
@@ -127,7 +138,7 @@ impl World {
     }
 
     pub(crate) unsafe fn get_event_manager_mut(&self) -> *mut EventManager {
-        self.event_manager.as_ptr() as *mut EventManager
+        self.event_manager.as_ptr()
     }
 
     pub fn add_resource<T: 'static>(&self, resource: T) {
@@ -143,7 +154,7 @@ impl World {
     }
 
     pub(crate) unsafe fn get_resource_manager_mut(&self) -> *mut ResourceManager {
-        self.resources.as_ptr() as *mut ResourceManager
+        self.resources.as_ptr()
     }
 
     pub fn add_coroutine(&self, coroutine: Coroutine) {
@@ -168,7 +179,7 @@ impl World {
     }
 
     pub(crate) unsafe fn get_coroutine_manager_mut(&self) -> *mut CoroutineManager {
-        self.coroutine_manager.as_ptr() as *mut CoroutineManager
+        self.coroutine_manager.as_ptr()
     }
 
     pub fn add_extension<T: Extension + 'static>(&mut self, extension: T) {
@@ -181,5 +192,12 @@ impl World {
         for extension in extensions.borrow().iter() {
             extension.build(self);
         }
+    }
+}
+
+
+impl Default for World {
+    fn default() -> Self {
+        Self::new()
     }
 }

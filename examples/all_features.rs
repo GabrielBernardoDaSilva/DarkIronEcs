@@ -1,3 +1,6 @@
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 use dark_iron_ecs::core::{
     coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds},
     entity_manager::EntityManager,
@@ -64,11 +67,11 @@ fn main() {
         println!("Collision Event Hit");
     });
 
-    let entity1 = world.create_entity((Health(100),));
+    let entity1 = world.create_entity_with_id((Health(100),));
 
-    let entity2 = world.create_entity((Name("Enemy 2".to_string()), Health(200)));
+    let entity2 = world.create_entity_with_id((Name("Enemy 2".to_string()), Health(200)));
 
-    let entity3 = world.create_entity((
+    let entity3 = world.create_entity_with_id((
         Position { x: 0.0, y: 0.0 },
         Name("Enemy 3".to_string()),
         Health(300),
@@ -111,16 +114,11 @@ fn main() {
 
     world.run_update();
 
-    world.publish_event(CollisionEvent);
+    // world.publish_event(CollisionEvent);
     world.add_extension(ExtensionExample);
 
-    let q = world.create_query::<(&Health,)>().iter();
-    
+
     world.build();
     world.run_startup();
-    loop {
-        world.run_update();
-        world.update_coroutines(1.0);
-        std::thread::sleep(std::time::Duration::from_secs(1));
-    }
+    
 }

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::UnsafeCell, collections::HashMap};
 
 use super::entity::EntityId;
 
@@ -11,9 +11,8 @@ pub trait BundleComponent {
 
 impl<T> Component for T {}
 
-
 pub struct ComponentList {
-    pub components: Vec<Box<RefCell<dyn Component>>>,
+    pub components: Vec<Box<UnsafeCell<dyn Component>>>,
 }
 
 impl ComponentList {
@@ -24,14 +23,14 @@ impl ComponentList {
     }
 
     pub fn add<T: Component + 'static>(&mut self, component: T) {
-        self.components.push(Box::new(RefCell::new(component)));
+        self.components.push(Box::new(UnsafeCell::new(component)));
     }
 
     pub fn get<T: Component + 'static>(&self, index: usize) -> Option<&T> {
         let component = self.components.get(index);
         match component {
             Some(component) => {
-                let ptr = component.as_ref().as_ptr();
+                let ptr = component.get();
                 let ptr = ptr as *const T;
                 unsafe { Some(&*ptr) }
             }
@@ -43,7 +42,7 @@ impl ComponentList {
         let component = self.components.get(index);
         match component {
             Some(component) => {
-                let ptr = component.as_ref().as_ptr();
+                let ptr = component.get();
                 let ptr = ptr as *mut T;
                 unsafe { Some(&mut *ptr) }
             }
@@ -51,8 +50,14 @@ impl ComponentList {
         }
     }
 
-    pub fn remove(&mut self, index: usize) -> Box<RefCell<dyn Component>> {
+    pub fn remove(&mut self, index: usize) -> Box<UnsafeCell<dyn Component>> {
         self.components.remove(index)
+    }
+}
+
+impl Default for ComponentList {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -114,7 +119,6 @@ impl_bundle_component!(
 
 #[test]
 fn test() {
-
     struct Health(i32);
     let mut component_list = ComponentList::new();
     component_list.add(Health(100));

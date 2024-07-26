@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::UnsafeCell, collections::HashMap};
 
 use super::{
     component::{BundleComponent, Component, ComponentList},
@@ -11,7 +11,7 @@ pub struct Archetype {
     pub entities: Vec<EntityId>,
 }
 
-pub type MovedEntity = HashMap<std::any::TypeId, Box<RefCell<dyn Component>>>;
+pub type MovedEntity = HashMap<std::any::TypeId, Box<UnsafeCell<dyn Component>>>;
 
 impl Archetype {
     pub fn new(entity_id: EntityId, components: impl BundleComponent) -> Self {
@@ -41,7 +41,7 @@ impl Archetype {
         for (type_id, component_list) in components.create_map_components(entity_id) {
             self.components
                 .entry(type_id)
-                .or_insert_with(ComponentList::new)
+                .or_default()
                 .components
                 .extend(component_list.components);
         }
@@ -52,7 +52,7 @@ impl Archetype {
         for (type_id, component) in components {
             self.components
                 .entry(type_id)
-                .or_insert_with(ComponentList::new)
+                .or_default()
                 .components
                 .push(component);
         }

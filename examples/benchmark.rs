@@ -1,5 +1,6 @@
-use dark_iron_ecs::core::{entity_manager::EntityManager, query::Query, system::SystemSchedule, world::World};
-
+use dark_iron_ecs::core::{
+    entity_manager::EntityManager, query::Query, system::SystemSchedule, world::World,
+};
 
 struct Position {
     x: f32,
@@ -39,16 +40,15 @@ fn print_pawns(q: Query<(&Position, &Name)>) {
 
 fn main() {
     let start = std::time::Instant::now();
-    let world = World::new();
-    world.add_systems(
-        SystemSchedule::Startup,
-        (add_pawns, move_pawns, print_pawns),
-    );
-    world.run_startup();
+    World::new()
+        .add_systems(
+            SystemSchedule::Startup,
+            (add_pawns, move_pawns, print_pawns),
+        )
+        .run_startup();
 
     let duration = start.elapsed();
     println!("Time elapsed in building world: {:?}", duration);
 }
-
 
 // Time elapsed in building world: 121.1069256s

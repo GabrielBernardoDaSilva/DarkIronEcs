@@ -120,7 +120,6 @@ impl<'a> SystemParam<'a> for &ResourceManager {
     fn get_param(world: &'a super::world::World) -> Self {
         unsafe { &(*world.get_resource_manager()) }
     }
-
 }
 
 impl<'a> SystemParam<'a> for &mut ResourceManager {
@@ -129,3 +128,10 @@ impl<'a> SystemParam<'a> for &mut ResourceManager {
     }
 }
 
+
+
+impl Default for ResourceManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
