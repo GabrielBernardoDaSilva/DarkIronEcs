@@ -8,6 +8,7 @@ description = "A simple Entity Component System library for Rust"
 repository = "https://github.com/GabrielBernardoDaSilva/DarkIronEcs"
 keywords = ["ecs", "entity-component-system", "game-development", "data-oriented-design"]
 categories = ["development-tools", "game-development", ]
+readme = "README.md"
 
 
 
