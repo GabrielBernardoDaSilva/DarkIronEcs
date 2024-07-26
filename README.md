@@ -1,7 +1,7 @@
 # Dark Iron ECS
 
 <p align="center">
-      <img src="darkiron.png" alt="Dark Iron" />
+      ![Dark Iron](darkiron.png)
 </p>
 
 
