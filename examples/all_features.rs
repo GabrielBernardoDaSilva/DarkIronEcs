@@ -114,6 +114,8 @@ fn main() {
 
     world.run_update();
 
+    let _q = world.create_query::<(&Health,)>();
+ 
     world.publish_event(CollisionEvent);
     world.add_extension(ExtensionExample);
 

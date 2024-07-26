@@ -11,3 +11,4 @@ pub mod query;
 pub mod resources;
 pub mod system;
 pub mod world;
+pub mod coordinator;    

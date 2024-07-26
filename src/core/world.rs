@@ -65,13 +65,13 @@ impl World {
         self.entity_manager.borrow_mut().remove_entity(entity);
     }
 
-    pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<'a, T> {
+    pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<T> {
         Query::<T>::new(self)
     }
 
     pub fn create_query_with_constraint<'a, T: QueryParams<'a>, C: QueryConstraint>(
         &'a self,
-    ) -> Query<'a, T, C> {
+    ) -> Query<T, C> {
         Query::<T, C>::new(self)
     }
 
@@ -194,7 +194,6 @@ impl World {
         }
     }
 }
-
 
 impl Default for World {
     fn default() -> Self {
