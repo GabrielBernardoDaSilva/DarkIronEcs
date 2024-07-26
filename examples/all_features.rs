@@ -113,6 +113,8 @@ fn main() {
 
     world.publish_event(CollisionEvent);
     world.add_extension(ExtensionExample);
+
+    let q = world.create_query::<(&Health,)>().iter();
     
     world.build();
     world.run_startup();

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, pin::Pin, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use super::{
     component::{BundleComponent, Component},
@@ -13,23 +13,23 @@ use super::{
 };
 
 pub struct World {
-    pub entity_manager: Pin<Rc<RefCell<EntityManager>>>,
-    pub system_manager: Pin<Rc<RefCell<SystemManager>>>,
-    pub event_manager: Pin<Rc<RefCell<EventManager>>>,
-    pub resources: Pin<Rc<RefCell<ResourceManager>>>,
-    pub coroutine_manager: Pin<Rc<RefCell<CoroutineManager>>>,
-    pub extensions: Pin<Rc<RefCell<Vec<Box<dyn Extension>>>>>,
+    pub entity_manager: Rc<RefCell<EntityManager>>,
+    pub system_manager: Rc<RefCell<SystemManager>>,
+    pub event_manager: Rc<RefCell<EventManager>>,
+    pub resources: Rc<RefCell<ResourceManager>>,
+    pub coroutine_manager: Rc<RefCell<CoroutineManager>>,
+    pub extensions: Rc<RefCell<Vec<Box<dyn Extension>>>>,
 }
 
 impl World {
     pub fn new() -> Self {
         let world = Self {
-            entity_manager: Pin::new(Rc::new(RefCell::new(EntityManager::new()))),
-            system_manager: Pin::new(Rc::new(RefCell::new(SystemManager::new()))),
-            event_manager: Pin::new(Rc::new(RefCell::new(EventManager::new()))),
-            resources: Pin::new(Rc::new(RefCell::new(ResourceManager::new()))),
-            coroutine_manager: Pin::new(Rc::new(RefCell::new(CoroutineManager::new()))),
-            extensions: Pin::new(Rc::new(RefCell::new(Vec::new()))),
+            entity_manager: Rc::new(RefCell::new(EntityManager::new())),
+            system_manager: Rc::new(RefCell::new(SystemManager::new())),
+            event_manager: Rc::new(RefCell::new(EventManager::new())),
+            resources: Rc::new(RefCell::new(ResourceManager::new())),
+            coroutine_manager: Rc::new(RefCell::new(CoroutineManager::new())),
+            extensions: Rc::new(RefCell::new(Vec::new())),
         };
         world.event_manager.borrow_mut().set_world(&world);
         world
@@ -60,17 +60,13 @@ impl World {
     }
 
     pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<'a, T> {
-        let entity_manager_ptr = self.entity_manager.as_ptr();
-        let q = unsafe { Query::<T>::new(&(*entity_manager_ptr).archetypes) };
-        q
+        Query::<T>::new(self)
     }
 
     pub fn create_query_with_constraint<'a, T: QueryParams<'a>, C: QueryConstraint>(
         &'a self,
     ) -> Query<'a, T, C> {
-        let entity_manager_ptr = self.entity_manager.as_ptr();
-        let q = unsafe { Query::<T, C>::new(&(*entity_manager_ptr).archetypes) };
-        q
+        Query::<T, C>::new(self)
     }
 
     pub(crate) unsafe fn get_entity_manager(&self) -> *const EntityManager {
