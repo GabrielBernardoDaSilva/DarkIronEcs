@@ -114,7 +114,7 @@ fn main() {
 
     world.run_update();
 
-    // world.publish_event(CollisionEvent);
+    world.publish_event(CollisionEvent);
     world.add_extension(ExtensionExample);
 
 
