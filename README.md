@@ -1,7 +1,7 @@
 # Dark Iron ECS
 
 <p align="center">
-      ![Dark Iron](https://raw.githubusercontent.com/GabrielBernardoDaSilva/DarkIronEcs/master/logo/darkiron.png)
+      <img src='https://raw.githubusercontent.com/GabrielBernardoDaSilva/DarkIronEcs/master/logo/darkiron.png' alt='Dark Iron'/>
 </p>
 
 
