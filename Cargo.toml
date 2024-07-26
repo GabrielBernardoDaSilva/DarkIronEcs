@@ -6,7 +6,7 @@ authors = ["Gabriel Bernardo"]
 license = "MIT"
 description = "A simple Entity Component System library for Rust"
 repository = "https://github.com/GabrielBernardoDaSilva/DarkIronEcs"
-keywords = ["ecs", "entity-component-system", "game-development", "data-oriented-design"]
+keywords = ["ecs", "game-development", "data-oriented-design"]
 categories = ["development-tools", "game-development", ]
 readme = "README.md"
 
