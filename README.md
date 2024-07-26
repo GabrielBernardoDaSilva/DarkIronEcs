@@ -1,7 +1,7 @@
 # Dark Iron ECS
 
 <p align="center">
-      ![Dark Iron](darkiron.png)
+      ![Dark Iron](logo/darkiron.png)
 </p>
 
 
