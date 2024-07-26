@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use super::{as_any_trait::AsAny, system::SystemParam};
+use super::{as_any_trait::AsAny, coordinator::Coordinator, system::SystemParam};
 
 pub trait ResourceTrait: AsAny {}
 
@@ -84,12 +84,11 @@ impl<T: 'static> std::fmt::Display for Resource<T> {
     }
 }
 
-impl<'a, T: 'static> SystemParam<'a> for Resource<T> {
-    fn get_param(world: &'a super::world::World) -> Self {
-        unsafe {
-            let resource_manager = &(*world.get_resource_manager());
-            resource_manager.get_resource::<T>().unwrap()
-        }
+impl<T: 'static> SystemParam for Resource<T> {
+    fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        let resource_manager = coordinator.borrow().resources.clone();
+        let resource = resource_manager.borrow().get_resource::<T>().unwrap();
+        resource.clone()
     }
 }
 
@@ -116,19 +115,17 @@ impl ResourceManager {
     }
 }
 
-impl<'a> SystemParam<'a> for &ResourceManager {
-    fn get_param(world: &'a super::world::World) -> Self {
-        unsafe { &(*world.get_resource_manager()) }
+impl SystemParam for &ResourceManager {
+    fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        unsafe { &(*coordinator.borrow().get_resource_manager()) }
     }
 }
 
-impl<'a> SystemParam<'a> for &mut ResourceManager {
-    fn get_param(world: &'a super::world::World) -> Self {
-        unsafe { &mut (*world.get_resource_manager_mut()) }
+impl SystemParam for &mut ResourceManager {
+    fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        unsafe { &mut (*coordinator.borrow().get_resource_manager_mut()) }
     }
 }
-
-
 
 impl Default for ResourceManager {
     fn default() -> Self {

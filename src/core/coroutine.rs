@@ -120,20 +120,18 @@ impl Default for CoroutineManager {
     }
 }
 
-impl<'a> SystemParam<'a> for &CoroutineManager {
-    fn get_param(world: &'a World) -> Self {
-        unsafe {
-            let coroutine_manager = world.get_coroutine_manager();
-            &*coroutine_manager
-        }
+impl SystemParam for &CoroutineManager {
+    fn get_param(
+        coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
+    ) -> Self {
+        unsafe { &(*coordinator.borrow().get_coroutine_manager()) }
     }
 }
 
-impl<'a> SystemParam<'a> for &mut CoroutineManager {
-    fn get_param(world: &'a World) -> Self {
-        unsafe {
-            let coroutine_manager = world.get_coroutine_manager_mut();
-            &mut *coroutine_manager
-        }
+impl SystemParam for &mut CoroutineManager {
+    fn get_param(
+        coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
+    ) -> Self {
+        unsafe { &mut (*coordinator.borrow().get_coroutine_manager_mut()) }
     }
 }

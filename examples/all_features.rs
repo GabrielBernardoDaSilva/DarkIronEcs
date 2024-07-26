@@ -115,12 +115,14 @@ fn main() {
     world.run_update();
 
     let _q = world.create_query::<(&Health,)>();
- 
-    world.publish_event(CollisionEvent);
-    world.add_extension(ExtensionExample);
 
+    // world.publish_event(CollisionEvent);
+    world.add_extension(ExtensionExample);
 
     world.build();
     world.run_startup();
-    
+
+    loop {
+        world.run_update();
+    }
 }

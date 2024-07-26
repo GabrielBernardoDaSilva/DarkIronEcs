@@ -1,7 +1,11 @@
 use super::archetype::Archetype;
+use super::coordinator::Coordinator;
 use crate::core::system::SystemParam;
-use crate::core::world::World;
+
 use std::any::TypeId;
+use std::cell::RefCell;
+use std::pin::Pin;
+use std::rc::Rc;
 
 pub trait QueryParams<'a> {
     type QueryResult;
@@ -42,7 +46,7 @@ impl Constraints for () {
 }
 
 pub struct Query<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint = ()> {
-    pub archetypes: &'a Vec<Archetype>,
+    pub archetypes: Pin<&'a Vec<Archetype>>,
     _marked: std::marker::PhantomData<(T, Constraint)>,
 }
 pub trait Fetch<'a> {
@@ -147,16 +151,14 @@ impl_query_constrains!(
 );
 
 impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T, Constraint> {
-    pub fn new(world: &'a World) -> Self {
-        let archetypes = unsafe { &(*world.entity_manager.as_ptr()).archetypes };
-
+    pub fn new(archetypes: Pin<&'a Vec<Archetype>>) -> Query<'a, T, Constraint> {
         Query {
             archetypes,
             _marked: std::marker::PhantomData,
         }
     }
 
-    pub fn iter(&self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
+    pub fn iter(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
         let types = T::types_id();
         let constraint_types = Constraint::constraint_types();
         let mut components = Vec::new();
@@ -186,11 +188,15 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
     }
 }
 
-impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam<'a>
+impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam
     for Query<'a, T, Constraint>
 {
-    fn get_param(world: &'a World) -> Self {
-        Query::<T, Constraint>::new(world)
+    fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        let entity_manager: Rc<RefCell<super::entity_manager::EntityManager>> =
+            coordinator.borrow().entity_manager.clone();
+        let ptr = entity_manager.as_ptr();
+        let archetypes = Pin::new(unsafe { &(*ptr).archetypes });
+        Query::<T, Constraint>::new(archetypes)
     }
 }
 

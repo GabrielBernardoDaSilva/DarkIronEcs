@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::{cell::RefCell, rc::Rc};
 
-use super::world::World;
+use super::{coordinator::Coordinator, world::World};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SystemSchedule {
@@ -9,27 +10,26 @@ pub enum SystemSchedule {
     Shutdown,
 }
 
-pub trait SystemParam<'a> {
-    fn get_param(world: &'a World) -> Self;
+pub trait SystemParam {
+    fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self;
 }
 
 pub trait System<P> {
-    fn run(&self, world: &World);
+    fn run(&self, coordinator: Rc<RefCell<Coordinator>>);
 }
 
 pub trait IntoSystem<P> {
-    fn system(self) -> Box<dyn FnMut(&World)>;
+    fn system(self) -> Box<dyn FnMut(Rc<RefCell<Coordinator>>)>;
 }
 
 impl<F, P> IntoSystem<P> for F
 where
     F: System<P> + 'static,
 {
-    fn system(self) -> Box<dyn FnMut(&World)> {
-        Box::new(move |world| self.run(world))
+    fn system(self) -> Box<dyn FnMut(Rc<RefCell<Coordinator>>)> {
+        Box::new(move |coordinator| self.run(coordinator))
     }
 }
-
 
 macro_rules! impl_system {
     ( $head:ident ) => {
@@ -38,11 +38,10 @@ macro_rules! impl_system {
         impl<'a, Func, $head> System<($head,)> for Func
         where
             Func: Fn($head),
-            $head: SystemParam<'a>,
+            $head: SystemParam,
         {
-            fn run(&self, world: &World) {
-                let ptr = world as *const World;
-                let $head = $head::get_param(unsafe { &*ptr });
+            fn run(&self, coordinator: Rc<RefCell<Coordinator>>) {
+                let $head = $head::get_param(coordinator.clone());
                 self($head);
             }
         }
@@ -58,14 +57,14 @@ macro_rules! impl_system {
         impl<'a, Func, $head, $($tail,)*> System<($head, $($tail,)*)> for Func
         where
             Func: Fn($head, $($tail),*),
-            $head: SystemParam<'a>,
-            $($tail: SystemParam<'a>,)*
+            $head: SystemParam,
+            $($tail: SystemParam,)*
         {
-            fn run(&self, world: &World) {
-                let ptr = world as *const World;
-                let $head = $head::get_param(unsafe { &*ptr });
+            fn run(&self, coordinator: Rc<RefCell<Coordinator>>) {
+
+                let $head = $head::get_param(coordinator.clone());
                 $(
-                    let $tail = $tail::get_param(unsafe { &*ptr });
+                    let $tail = $tail::get_param(coordinator.clone());
                 )*
                 self($head, $($tail),*);
             }
@@ -75,9 +74,7 @@ macro_rules! impl_system {
 
 impl_system!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
-
-
-type SystemFunctionMap = HashMap<SystemSchedule, Vec<Box<dyn FnMut(&World)>>>;
+type SystemFunctionMap = HashMap<SystemSchedule, Vec<Box<dyn FnMut(Rc<RefCell<Coordinator>>)>>>;
 
 pub struct SystemManager {
     pub systems: SystemFunctionMap,
@@ -103,7 +100,7 @@ impl SystemManager {
     pub fn run_startup_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Startup) {
             for system in systems.iter_mut() {
-                system(world);
+                system(world.coordinator.clone().unwrap());
             }
         }
     }
@@ -111,7 +108,7 @@ impl SystemManager {
     pub fn run_update_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Update) {
             for system in systems.iter_mut() {
-                system(world);
+                system(world.coordinator.clone().unwrap());
             }
         }
     }
@@ -119,15 +116,15 @@ impl SystemManager {
     pub fn run_shutdown_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Shutdown) {
             for system in systems.iter_mut() {
-                system(world);
+                system(world.coordinator.clone().unwrap());
             }
         }
     }
 }
 
-impl<'a> SystemParam<'a> for &SystemManager {
-    fn get_param(world: &'a World) -> Self {
-        unsafe { &(*world.get_system_manager()) }
+impl SystemParam for &SystemManager {
+    fn get_param(world: Rc<RefCell<Coordinator>>) -> Self {
+        unsafe { &(*world.borrow().get_system_manager()) }
     }
 }
 

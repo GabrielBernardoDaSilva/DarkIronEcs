@@ -12,15 +12,19 @@ pub struct EntityManager {
     pub archetypes: Vec<Archetype>,
 }
 
-impl<'a> SystemParam<'a> for &EntityManager {
-    fn get_param(world: &'a super::world::World) -> Self {
-        unsafe { &(*world.get_entity_manager()) }
+impl SystemParam for &EntityManager {
+    fn get_param(
+        coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
+    ) -> Self {
+        unsafe { &*coordinator.borrow().get_entity_manager() }
     }
 }
 
-impl<'a> SystemParam<'a> for &mut EntityManager {
-    fn get_param(world: &'a super::world::World) -> Self {
-        unsafe { &mut (*world.get_entity_manager_mut()) }
+impl SystemParam for &mut EntityManager {
+    fn get_param(
+        coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
+    ) -> Self {
+        unsafe { &mut *coordinator.borrow().get_entity_manager_mut() }
     }
 }
 

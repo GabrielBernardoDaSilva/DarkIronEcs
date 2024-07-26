@@ -1,7 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, pin::Pin, rc::Rc};
 
 use super::{
     component::{BundleComponent, Component},
+    coordinator::Coordinator,
     coroutine::{Coroutine, CoroutineManager},
     entity::Entity,
     entity_manager::EntityManager,
@@ -19,19 +20,25 @@ pub struct World {
     pub resources: Rc<RefCell<ResourceManager>>,
     pub coroutine_manager: Rc<RefCell<CoroutineManager>>,
     pub extensions: Rc<RefCell<Vec<Box<dyn Extension>>>>,
+    pub coordinator: Option<Rc<RefCell<Coordinator>>>,
 }
 
 impl World {
     pub fn new() -> Self {
-        let world = Self {
+        let mut world = Self {
             entity_manager: Rc::new(RefCell::new(EntityManager::new())),
             system_manager: Rc::new(RefCell::new(SystemManager::new())),
             event_manager: Rc::new(RefCell::new(EventManager::new())),
             resources: Rc::new(RefCell::new(ResourceManager::new())),
             coroutine_manager: Rc::new(RefCell::new(CoroutineManager::new())),
             extensions: Rc::new(RefCell::new(Vec::new())),
+            coordinator: None,
         };
         world.event_manager.borrow_mut().set_world(&world);
+
+        let coordinator = Coordinator::new(&world);
+        world.coordinator = Some(Rc::new(RefCell::new(coordinator)));
+
         world
     }
 
@@ -66,21 +73,17 @@ impl World {
     }
 
     pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<T> {
-        Query::<T>::new(self)
+        let entity_manager = self.entity_manager.clone();
+        let archetype_ptr = unsafe { &(*entity_manager.as_ptr()).archetypes };
+        Query::<T>::new(Pin::new(archetype_ptr))
     }
 
     pub fn create_query_with_constraint<'a, T: QueryParams<'a>, C: QueryConstraint>(
         &'a self,
     ) -> Query<T, C> {
-        Query::<T, C>::new(self)
-    }
-
-    pub(crate) unsafe fn get_entity_manager(&self) -> *const EntityManager {
-        self.entity_manager.as_ptr()
-    }
-
-    pub(crate) unsafe fn get_entity_manager_mut(&self) -> *mut EntityManager {
-        self.entity_manager.as_ptr()
+        let entity_manager = self.entity_manager.clone();
+        let archetype_ptr = unsafe { &(*entity_manager.as_ptr()).archetypes };
+        Query::<T, C>::new(Pin::new(archetype_ptr))
     }
 
     pub fn add_system<P>(
@@ -116,10 +119,6 @@ impl World {
         self.system_manager.borrow_mut().run_shutdown_systems(self);
     }
 
-    pub(crate) unsafe fn get_system_manager(&self) -> *const SystemManager {
-        self.system_manager.as_ptr()
-    }
-
     pub(crate) unsafe fn get_system_manager_mut(&self) -> *mut SystemManager {
         self.system_manager.as_ptr()
     }
@@ -132,29 +131,12 @@ impl World {
         let event_handler = EventHandler::new(system);
         self.event_manager.borrow_mut().subscribe(event_handler);
     }
-
-    pub(crate) unsafe fn get_event_manager(&self) -> *const EventManager {
-        self.event_manager.as_ptr()
-    }
-
-    pub(crate) unsafe fn get_event_manager_mut(&self) -> *mut EventManager {
-        self.event_manager.as_ptr()
-    }
-
     pub fn add_resource<T: 'static>(&self, resource: T) {
         self.resources.borrow_mut().add(resource);
     }
 
     pub fn get_resource<T: 'static>(&self) -> Option<Resource<T>> {
         self.resources.borrow().get_resource::<T>()
-    }
-
-    pub(crate) unsafe fn get_resource_manager(&self) -> *const ResourceManager {
-        self.resources.as_ptr()
-    }
-
-    pub(crate) unsafe fn get_resource_manager_mut(&self) -> *mut ResourceManager {
-        self.resources.as_ptr()
     }
 
     pub fn add_coroutine(&self, coroutine: Coroutine) {
@@ -172,14 +154,6 @@ impl World {
     pub fn update_coroutines(&mut self, delta_time: f32) {
         let coroutine_manager = self.coroutine_manager.clone();
         coroutine_manager.borrow_mut().update(self, delta_time);
-    }
-
-    pub(crate) unsafe fn get_coroutine_manager(&self) -> *const CoroutineManager {
-        self.coroutine_manager.as_ptr()
-    }
-
-    pub(crate) unsafe fn get_coroutine_manager_mut(&self) -> *mut CoroutineManager {
-        self.coroutine_manager.as_ptr()
     }
 
     pub fn add_extension<T: Extension + 'static>(&mut self, extension: T) {

@@ -1,9 +1,11 @@
 use std::{
     any::{Any, TypeId},
+    cell::RefCell,
     collections::HashMap,
+    rc::Rc,
 };
 
-use super::{as_any_trait::AsAny, system::SystemParam, world::World};
+use super::{as_any_trait::AsAny, coordinator::Coordinator, system::SystemParam, world::World};
 
 type EventFunction<T> = Box<dyn Fn(&World, T)>;
 
@@ -76,15 +78,15 @@ impl EventManager {
     }
 }
 
-impl<'a> SystemParam<'a> for &EventManager {
-    fn get_param(world: &'a World) -> Self {
-        unsafe { &(*world.get_event_manager()) }
+impl SystemParam for &EventManager {
+    fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        unsafe { &(*coordinator.borrow().get_event_manager()) }
     }
 }
 
-impl<'a> SystemParam<'a> for &mut EventManager {
-    fn get_param(world: &'a World) -> Self {
-        unsafe { &mut (*world.get_event_manager_mut()) }
+impl SystemParam for &mut EventManager {
+    fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        unsafe { &mut (*coordinator.borrow().get_event_manager_mut()) }
     }
 }
 
