@@ -62,14 +62,16 @@ impl World {
         &mut self,
         entity: Entity,
         component: T,
-    ) {
+    ) -> &mut Self {
         self.entity_manager
             .borrow_mut()
             .add_component_to_entity(entity, component);
+        self
     }
 
-    pub fn remove_entity(&mut self, entity: Entity) {
+    pub fn remove_entity(&mut self, entity: Entity) -> &mut Self {
         self.entity_manager.borrow_mut().remove_entity(entity);
+        self
     }
 
     pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<T> {
@@ -123,24 +125,28 @@ impl World {
         self.system_manager.as_ptr()
     }
 
-    pub fn publish_event<T: 'static>(&self, event: T) {
+    pub fn publish_event<T: 'static>(&mut self, event: T) -> &mut Self {
         self.event_manager.borrow_mut().publish(event);
+        self
     }
 
-    pub fn subscribe_event<T: 'static, FUNC: 'static + Fn(&World, T)>(&self, system: FUNC) {
+    pub fn subscribe_event<T: 'static, FUNC: 'static + Fn(&World, T)>(&mut self, system: FUNC) -> &mut Self{
         let event_handler = EventHandler::new(system);
         self.event_manager.borrow_mut().subscribe(event_handler);
+        self
     }
-    pub fn add_resource<T: 'static>(&self, resource: T) {
+    pub fn add_resource<T: 'static>(&mut self, resource: T) -> &mut Self {
         self.resources.borrow_mut().add(resource);
+        self
     }
 
     pub fn get_resource<T: 'static>(&self) -> Option<Resource<T>> {
         self.resources.borrow().get_resource::<T>()
     }
 
-    pub fn add_coroutine(&self, coroutine: Coroutine) {
+    pub fn add_coroutine(&mut self, coroutine: Coroutine) -> &mut Self{
         self.coroutine_manager.borrow_mut().add_coroutine(coroutine);
+        self
     }
 
     pub fn stop_all_coroutines(&self) {
@@ -156,16 +162,18 @@ impl World {
         coroutine_manager.borrow_mut().update(self, delta_time);
     }
 
-    pub fn add_extension<T: Extension + 'static>(&mut self, extension: T) {
+    pub fn add_extension<T: Extension + 'static>(&mut self, extension: T) -> &mut Self {
         let extensions = self.extensions.clone();
         extensions.borrow_mut().push(Box::new(extension));
+        self
     }
 
-    pub fn build(&mut self) {
+    pub fn build(&mut self) -> &mut Self {
         let extensions = self.extensions.clone();
         for extension in extensions.borrow().iter() {
             extension.build(self);
         }
+        self
     }
 }
 
