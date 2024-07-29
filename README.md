@@ -4,8 +4,6 @@
       <img src='https://raw.githubusercontent.com/GabrielBernardoDaSilva/DarkIronEcs/master/logo/darkiron.png' alt='Dark Iron'/>
 </p>
 
-
-
 ## Features
 
 - **Entity Creation**: Easily create entities and attach components to them.
@@ -16,7 +14,8 @@
 - **Extensions**: Extend the functionality of the ECS with custom extensions.
 - **Chained Building**: World could be create by a chain of methods.
 
-## Example 
+## Example
+
 Demonstrates how to use the `dark_iron_ecs` library to create an Entity Component System (ECS) in Rust. The example includes creating components, querying entities, and setting up systems to interact with those components.
 
 ## Setup
@@ -29,7 +28,8 @@ dark_iron_ecs = "*"  # Replace with the actual version
 ```
 
 ### Imports
-For this example the necessary imports: 
+
+For this example the necessary imports:
 
 ```rust
 use dark_iron_ecs::core::{
@@ -45,6 +45,7 @@ use dark_iron_ecs::core::{
 ```
 
 ### Components
+
 Define your components. Components are data associated with entities.
 
 ```rust
@@ -59,6 +60,7 @@ struct Health(i32);
 ```
 
 ### Systems
+
 Define systems to operate on entities that have specific components. Systems are functions that process entities.
 
 ```rust
@@ -91,6 +93,7 @@ fn test_system_1(
 ### Events
 
 Define events that can be published and subscribed to within the world.
+
 ```rust
 struct CollisionEvent;
 ```
@@ -98,6 +101,7 @@ struct CollisionEvent;
 ### Resources
 
 Define resources that are globally accessible by systems.
+
 ```rust
 struct Camera {
     x: f32,
@@ -145,6 +149,10 @@ fn main() {
         Name("Enemy 3".to_string()),
         Health(300),
     ));
+
+    if let Some(health) = entity1.get_component::<Health>(&world){
+        println!("Component {:?}", health.0);
+    }
 
     let mut counter = 10;
     world
@@ -207,6 +215,7 @@ fn main() {
 ```
 
 ### Running the Project
+
 To run the project, use Cargo:
 
 ```bash
@@ -218,7 +227,6 @@ This will compile and run your ECS example, demonstrating how to create and mana
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
 
 MIT License
 
