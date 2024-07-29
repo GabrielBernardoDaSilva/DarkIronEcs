@@ -91,6 +91,25 @@ impl<'a, T: 'static> Fetch<'a> for &T {
     }
 }
 
+
+impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
+    type QueryResult = T::Result;
+
+    fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
+        T::fetch(archetype, entity_location)
+    }
+
+    fn types_id() -> Vec<TypeId> {
+        vec![<T>::get_type_id()]
+    }
+}
+
+impl<T: for<'a> Fetch<'a>  + 'static > Constraints for T {
+    fn constraint_types() -> Vec<TypeId> {
+        vec![<T>::get_type_id()]
+    }
+}
+
 macro_rules! impl_query_params {
     ( $head:ident ) => {
         impl<'a, $head: Fetch<'a> + 'static> QueryParams<'a> for ($head,) {
@@ -157,8 +176,37 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
             _marked: std::marker::PhantomData,
         }
     }
-
+    #[deprecated]
     pub fn iter(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
+        let types = T::types_id();
+        let constraint_types = Constraint::constraint_types();
+        let mut components = Vec::new();
+
+        for arch in self.archetypes.iter() {
+            let has_any_entities = arch.entities.is_empty();
+            let is_archetype_components_bigger = types.len() > arch.components.len();
+            let contains_all = types
+                .iter()
+                .any(|type_id| -> bool { arch.has_type(*type_id) });
+            let has_constraint = constraint_types
+                .iter()
+                .any(|type_id| -> bool { arch.has_type(*type_id) });
+
+            if contains_all
+                && !has_any_entities
+                && !is_archetype_components_bigger
+                && !has_constraint
+            {
+                for (index, _) in arch.entities.iter().enumerate() {
+                    let component = T::get_component_in_archetype(arch, index as u32);
+                    components.push(component);
+                }
+            }
+        }
+        components
+    }
+
+    pub fn fetch(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
         let types = T::types_id();
         let constraint_types = Constraint::constraint_types();
         let mut components = Vec::new();
@@ -214,4 +262,9 @@ fn query_test() {
     #[derive(Debug)]
     #[allow(dead_code)]
     pub struct Name(String);
+    let v = vec![];
+    let q = Query::<&Health>::new(Pin::new(&v));
+    for h in q.fetch() {
+        println!("{:?}", h);
+    }
 }
