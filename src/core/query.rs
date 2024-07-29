@@ -61,8 +61,8 @@ impl<'a, T: 'static> Fetch<'a> for &mut T {
     fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Self::Result {
         let type_id = TypeId::of::<T>();
 
-        let res = archetypes.components.get(&type_id).unwrap();
-        let c: &mut T = res.get_mut(entity_id as usize).unwrap();
+        let res = archetypes.components.get(&type_id).expect(format!("Component not found {:?}", type_id).as_str());
+        let c: &mut T = res.get_mut(entity_id as usize).expect(format!("Entity not found {}", entity_id).as_str());
         unsafe {
             let ptr = c as *mut T;
             &mut *ptr
@@ -78,8 +78,8 @@ impl<'a, T: 'static> Fetch<'a> for &T {
     type Result = Self;
     fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Self::Result {
         let type_id = TypeId::of::<T>();
-        let res = archetypes.components.get(&type_id).unwrap();
-        let c: &mut T = res.get_mut(entity_id as usize).unwrap();
+        let res = archetypes.components.get(&type_id).expect(format!("Component not found {:?}", type_id).as_str());
+        let c: &mut T = res.get_mut(entity_id as usize).expect(format!("Entity not found {}", entity_id).as_str());
         unsafe {
             let ptr = c as *mut T;
             &mut *ptr
