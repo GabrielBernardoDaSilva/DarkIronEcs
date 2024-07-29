@@ -4,6 +4,7 @@ use super::{
     archetype::{Archetype, MovedEntity},
     component::{BundleComponent, Component},
     entity::Entity,
+    error::QueryError,
     system::SystemParam,
 };
 
@@ -138,6 +139,46 @@ impl EntityManager {
             let archetype = Archetype::new_from_migration(entity.id, components);
             self.archetypes.push(archetype);
             self.entities[entity.entity_location].entity_location = self.archetypes.len() - 1;
+        }
+    }
+
+    pub fn get_component<T: 'static + Component>(
+        &self,
+        entity: Entity,
+    ) -> Result<*const T, QueryError> {
+        let entity_opt = self.entities.iter().find(|ent| ent.id == entity.id);
+        if let Some(entity) = entity_opt {
+            let archetype = &self.archetypes[entity.entity_location];
+            let component = archetype.get_component::<T>(entity.id);
+            match component {
+                Some(component) => Ok(component),
+                None => Err(QueryError::ComponentNotFound(format!(
+                    "Component Type {:?}",
+                    std::any::type_name::<T>()
+                ))),
+            }
+        } else {
+            Err(QueryError::EntityNotFound(entity.id))
+        }
+    }
+
+    pub fn get_component_mut<T: 'static + Component>(
+        &self,
+        entity: Entity,
+    ) -> Result<*mut T, QueryError> {
+        let entity_opt = self.entities.iter().find(|ent| ent.id == entity.id);
+        if let Some(entity) = entity_opt {
+            let archetype = &self.archetypes[entity.entity_location];
+            let component = archetype.get_component_mut::<T>(entity.id);
+            match component {
+                Some(component) => Ok(component),
+                None => Err(QueryError::ComponentNotFound(format!(
+                    "Component Type {:?}",
+                    std::any::type_name::<T>()
+                ))),
+            }
+        } else {
+            Err(QueryError::EntityNotFound(entity.id))
         }
     }
 }
