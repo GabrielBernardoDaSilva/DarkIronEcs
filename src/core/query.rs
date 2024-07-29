@@ -1,5 +1,6 @@
 use super::archetype::Archetype;
 use super::coordinator::Coordinator;
+use super::error::QueryError;
 use crate::core::system::SystemParam;
 
 use std::any::TypeId;
@@ -51,21 +52,25 @@ pub struct Query<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint =
 }
 pub trait Fetch<'a> {
     type Result;
-    fn fetch(archetype: &'a Archetype, entity_id: u32) -> Self::Result;
+    fn fetch(archetype: &'a Archetype, entity_id: u32) -> Result<Self::Result, QueryError>;
 
     fn get_type_id() -> TypeId;
 }
 
 impl<'a, T: 'static> Fetch<'a> for &mut T {
     type Result = Self;
-    fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Self::Result {
+    fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Result<Self::Result, QueryError> {
         let type_id = TypeId::of::<T>();
 
-        let res = archetypes.components.get(&type_id).expect(format!("Component not found {:?}", type_id).as_str());
-        let c: &mut T = res.get_mut(entity_id as usize).expect(format!("Entity not found {}", entity_id).as_str());
-        unsafe {
-            let ptr = c as *mut T;
-            &mut *ptr
+        match archetypes.components.get(&type_id) {
+            Some(res) => match res.get_mut(entity_id as usize) {
+                Some(c) => Ok(unsafe { &mut *c }),
+                None => Err(QueryError::EntityNotFound(entity_id)),
+            },
+            None => Err(QueryError::ComponentNotFound(format!(
+                "Component Type {:?}",
+                std::any::type_name::<T>()
+            ))),
         }
     }
 
@@ -76,13 +81,17 @@ impl<'a, T: 'static> Fetch<'a> for &mut T {
 
 impl<'a, T: 'static> Fetch<'a> for &T {
     type Result = Self;
-    fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Self::Result {
+    fn fetch(archetypes: &'a Archetype, entity_id: u32) -> Result<Self::Result, QueryError> {
         let type_id = TypeId::of::<T>();
-        let res = archetypes.components.get(&type_id).expect(format!("Component not found {:?}", type_id).as_str());
-        let c: &mut T = res.get_mut(entity_id as usize).expect(format!("Entity not found {}", entity_id).as_str());
-        unsafe {
-            let ptr = c as *mut T;
-            &mut *ptr
+        match archetypes.components.get(&type_id) {
+            Some(res) => match res.get(entity_id as usize) {
+                Some(c) => Ok(unsafe { &*c }),
+                None => Err(QueryError::EntityNotFound(entity_id)),
+            },
+            None => Err(QueryError::ComponentNotFound(format!(
+                "Component Type {:?}",
+                std::any::type_name::<T>()
+            ))),
         }
     }
 
@@ -91,12 +100,17 @@ impl<'a, T: 'static> Fetch<'a> for &T {
     }
 }
 
-
 impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
     type QueryResult = T::Result;
 
-    fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
-        T::fetch(archetype, entity_location)
+    fn get_component_in_archetype(
+        archetype: &'a Archetype,
+        entity_location: u32,
+    ) -> Self::QueryResult {
+        match <T as Fetch<'a>>::fetch(archetype, entity_location) {
+            Ok(res) => res,
+            Err(e) => panic!("{:?}", e),
+        }
     }
 
     fn types_id() -> Vec<TypeId> {
@@ -104,7 +118,7 @@ impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
     }
 }
 
-impl<T: for<'a> Fetch<'a>  + 'static > Constraints for T {
+impl<T: for<'a> Fetch<'a> + 'static> Constraints for T {
     fn constraint_types() -> Vec<TypeId> {
         vec![<T>::get_type_id()]
     }
@@ -116,7 +130,10 @@ macro_rules! impl_query_params {
             type QueryResult = $head::Result;
 
             fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
-                $head::fetch(archetype, entity_location)
+                match $head::fetch(archetype, entity_location){
+                    Ok(res) => res,
+                    Err(e) => panic!("{:?}", e)
+                }
             }
 
             fn types_id() -> Vec<TypeId> {
@@ -132,7 +149,18 @@ macro_rules! impl_query_params {
             type QueryResult = ($head::Result, $($tail::Result),+);
 
             fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
-                ($head::fetch(archetype, entity_location), $($tail::fetch(archetype, entity_location)),+)
+                (
+                    match $head::fetch(archetype, entity_location){
+                        Ok(res) => res,
+                        Err(e) => panic!("{:?}", e)
+                    },
+                    $(
+                        match $tail::fetch(archetype, entity_location){
+                            Ok(res) => res,
+                            Err(e) => panic!("{:?}", e)
+                        }
+                    ),+
+                )
             }
             fn types_id() -> Vec<TypeId> {
                 let types = vec![<$head>::get_type_id(), $($tail::get_type_id()),+];
