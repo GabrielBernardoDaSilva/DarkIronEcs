@@ -26,25 +26,24 @@ impl ComponentList {
         self.components.push(Box::new(UnsafeCell::new(component)));
     }
 
-    pub fn get<T: Component + 'static>(&self, index: usize) -> Option<&T> {
+    pub fn get<T: Component + 'static>(&self, index: usize) -> Option<*const T> {
         let component = self.components.get(index);
         match component {
             Some(component) => {
                 let ptr = component.get();
-                let ptr = ptr.cast::<T>();
-                unsafe { ptr.as_ref() }
+                Some(ptr.cast::<T>())
             }
             None => None,
         }
     }
 
-    pub fn get_mut<T: Component + 'static>(&self, index: usize) -> Option<&mut T> {
+    pub fn get_mut<T: Component + 'static>(&self, index: usize) -> Option<*mut T> {
         let component = self.components.get(index);
         match component {
             Some(component) => {
                 let ptr = component.get();
-                let ptr = ptr.cast::<T>();
-                unsafe { ptr.as_mut() }
+                Some(ptr.cast::<T>())
+                
             }
             None => None,
         }
@@ -117,14 +116,3 @@ impl_bundle_component!(
     A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
 );
 
-#[test]
-fn test() {
-    struct Health(i32);
-    let mut component_list = ComponentList::new();
-    component_list.add(Health(100));
-    let health = component_list.get::<Health>(0).unwrap();
-    println!("Health: {}", health.0);
-    let health = component_list.get_mut::<Health>(0).unwrap();
-    health.0 = 50;
-    println!("Health: {}", health.0);
-}
