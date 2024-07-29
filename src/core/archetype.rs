@@ -99,6 +99,19 @@ impl Archetype {
     pub fn is_empty(&self) -> bool {
         self.entities.is_empty()
     }
+
+    pub fn get_component<T: Component + 'static>(&self, entity_index: u32) -> Option<*const T> {
+        let component_list = self.components.get(&std::any::TypeId::of::<T>())?;
+        component_list.get(entity_index as usize)
+    }
+
+    pub fn get_component_mut<T: Component + 'static>(
+        &self,
+        entity_index: u32,
+    ) -> Option<*mut T> {
+        let component_list = self.components.get(&std::any::TypeId::of::<T>())?;
+        component_list.get_mut(entity_index as usize)
+    }
 }
 
 #[test]

@@ -75,6 +75,10 @@ fn main() {
         Health(300),
     ));
 
+    if let Some(health) = entity1.get_component::<Health>(&world){
+        println!("Component {:?}", health.0);
+    }
+
     let mut counter = 10;
     world
         .create_entity((Velocity(0.0, 0.0),))
