@@ -14,6 +14,7 @@
 - **Queries**: Efficiently query entities based on their components.
 - **Systems**: Implement game logic and behaviors through systems that process entities based on queries.
 - **Extensions**: Extend the functionality of the ECS with custom extensions.
+- **Chained Building**: World could be create by a chain of methods.
 
 ## Example 
 Demonstrates how to use the `dark_iron_ecs` library to create an Entity Component System (ECS) in Rust. The example includes creating components, querying entities, and setting up systems to interact with those components.
@@ -63,7 +64,7 @@ Define systems to operate on entities that have specific components. Systems are
 ```rust
 fn test_system(q: Query<(&Health,)>, entity_manager: &mut EntityManager) {
     entity_manager.create_entity((Health(500),));
-    for health in q.iter() {
+    for health in q.fetch() {
         println!("{:?}", health.0);
     }
 }
@@ -73,11 +74,11 @@ fn test_system_1(
     q2: Query<(&Health,), Without<(&Name,)>>,
     mut camera: Resource<Camera>,
 ) {
-    for health in q.iter() {
+    for health in q.fetch() {
         println!("q {:?}", health.0);
     }
 
-    for health in q2.iter() {
+    for health in q2.fetch() {
         println!("q2 {:?}", health.0);
     }
 
@@ -135,62 +136,67 @@ use dark_iron_ecs::core::{
 fn main() {
     let mut world = World::new();
 
-    world.subscribe_event(|_world: &World, _t: CollisionEvent| {
-        println!("Collision Event Hit");
-    });
+    let entity1 = world.create_entity_with_id((Health(100),));
 
-    let entity1 = world.create_entity((Health(100),));
+    let entity2 = world.create_entity_with_id((Name("Enemy 2".to_string()), Health(200)));
 
-    let entity2 = world.create_entity((Name("Enemy 2".to_string()), Health(200)));
-
-    let entity3 = world.create_entity((
+    let entity3 = world.create_entity_with_id((
         Position { x: 0.0, y: 0.0 },
         Name("Enemy 3".to_string()),
         Health(300),
     ));
 
-    world.remove_component::<Health>(entity3);
-
-    world.add_component_to_entity(entity3, Health(400));
-
     let mut counter = 10;
-    world.add_coroutine(Coroutine::new("Test Coroutine", move |world| {
-        if counter == 10 {
-            println!("Coroutine Started");
-        }
-
-        counter -= 1;
-        if counter == 0 {
-            println!("Coroutine Finished");
-            world.remove_entity(entity3);
-            world.create_entity((Health(900),));
-            world.add_component_to_entity(entity1, Name("Player".to_string()));
-            world.remove_component::<Health>(entity2);
-            return CoroutineState::Finished;
-        }
-
-        println!("Coroutine Running");
-        CoroutineState::Yielded(WaitAmountOfSeconds {
-            amount_in_seconds: 1.0,
+    world
+        .subscribe_event(|_world: &World, _t: CollisionEvent| {
+            println!("Collision Event Hit");
         })
-    }));
+        .remove_component::<Health>(entity3)
+        .add_component_to_entity(entity3, Health(400))
+        .add_coroutine(Coroutine::new("Test Coroutine", move |world| {
+            if counter == 10 {
+                println!("Coroutine Started");
+            }
 
-    world.add_resource(Camera {
-        x: 1000.0,
-        y: 0.0,
-        z: 0.0,
-    });
+            counter -= 1;
+            if counter == 0 {
+                println!("Coroutine Finished");
+                world.remove_entity(entity3);
+                world.create_entity((Health(900),));
+                world.add_component_to_entity(entity1, Name("Player".to_string()));
+                world.remove_component::<Health>(entity2);
+                world.publish_event(CollisionEvent);
+                return CoroutineState::Finished;
+            }
 
-    world.add_system(SystemSchedule::Startup, test_system);
-    world.add_systems(SystemSchedule::Update, (test_system_1,));
+            println!("Coroutine Running");
+            CoroutineState::Yielded(WaitAmountOfSeconds {
+                amount_in_seconds: 1.0,
+            })
+        }))
+        .add_resource(Camera {
+            x: 1000.0,
+            y: 0.0,
+            z: 0.0,
+        })
+        .add_system(SystemSchedule::Startup, test_system)
+        .add_systems(SystemSchedule::Update, (test_system_1,))
+        .run_startup()
+        .add_extension(ExtensionExample)
+        .build();
 
-    world.run_update();
+    let q = world.create_query::<&Health>();
+    let q1 = world.create_query_with_constraint::<&Health, Without<&Name>>();
 
-    world.publish_event(CollisionEvent);
-    world.add_extension(ExtensionExample);
-    
-    world.build();
-    world.run_startup();
+    for health in q.fetch() {
+        println!("{:?}", health.0);
+    }
+
+    for health in q1.fetch() {
+        println!("{:?}", health.0);
+    }
+
+
     loop {
         world.run_update();
         world.update_coroutines(1.0);

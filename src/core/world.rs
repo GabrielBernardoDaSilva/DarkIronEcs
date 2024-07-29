@@ -108,7 +108,7 @@ impl World {
         systems.add_systems(action, system_manager);
         self
     }
-    pub fn run_startup(&self) -> &Self {
+    pub fn run_startup(&mut self) -> &mut Self {
         self.system_manager.borrow_mut().run_startup_systems(self);
         self
     }

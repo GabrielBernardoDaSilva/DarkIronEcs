@@ -25,14 +25,14 @@ fn add_pawns(entity_manager: &mut EntityManager) {
 
 fn move_pawns(q: Query<(&mut Position,)>) {
     println!("Moving pawns");
-    for position in q.iter() {
+    for position in q.fetch() {
         position.x += 1.0;
         position.y += 1.0;
     }
 }
 
 fn print_pawns(q: Query<(&Position, &Name)>) {
-    for (position, name) in q.iter() {
+    for (position, name) in q.fetch() {
         println!("Name: {}", name.0);
         println!("Position: x: {}, y: {}", position.x, position.y);
     }
