@@ -148,6 +148,7 @@ fn main() {
 
     let mut counter = 10;
     world
+        .create_entity((Velocity(0.0, 0.0),))
         .subscribe_event(|_world: &World, _t: CollisionEvent| {
             println!("Collision Event Hit");
         })
