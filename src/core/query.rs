@@ -215,7 +215,7 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
             let is_archetype_components_bigger = types.len() > arch.components.len();
             let contains_all = types
                 .iter()
-                .any(|type_id| -> bool { arch.has_type(*type_id) });
+                .all(|type_id| -> bool { arch.has_type(*type_id) });
             let has_constraint = constraint_types
                 .iter()
                 .any(|type_id| -> bool { arch.has_type(*type_id) });
@@ -244,7 +244,7 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
             let is_archetype_components_bigger = types.len() > arch.components.len();
             let contains_all = types
                 .iter()
-                .any(|type_id| -> bool { arch.has_type(*type_id) });
+                .all(|type_id| -> bool { arch.has_type(*type_id) });
             let has_constraint = constraint_types
                 .iter()
                 .any(|type_id| -> bool { arch.has_type(*type_id) });

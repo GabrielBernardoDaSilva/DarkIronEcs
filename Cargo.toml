@@ -1,6 +1,6 @@
 [package]
 name = "dark_iron_ecs"
-version = "0.6.85"
+version = "0.6.9"
 edition = "2021"
 authors = ["Gabriel Bernardo"]
 license = "MIT"
@@ -24,4 +24,9 @@ path = "examples/all_features.rs"
 [[example]]
 name = "benchmark"
 path = "examples/benchmark.rs"
+
+[[example]]
+name = "simple_query"
+path = "examples/simple_query.rs"
+
 
