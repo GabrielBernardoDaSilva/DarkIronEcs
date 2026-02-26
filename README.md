@@ -23,7 +23,7 @@ Add `dark_iron_ecs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dark_iron_ecs = "0.7.0"
+dark_iron_ecs = "0.9.0"
 ```
 
 ## Quick Example
@@ -183,10 +183,10 @@ if let Some(health) = entity.get_component::<Health>(&world) {
 
 ## System Schedules
 
-| Schedule | When it runs |
-|---|---|
-| `SystemSchedule::Startup` | Once, via `world.run_startup()` |
-| `SystemSchedule::Update` | Every frame, via `world.run_update()` |
+| Schedule                   | When it runs                            |
+| -------------------------- | --------------------------------------- |
+| `SystemSchedule::Startup`  | Once, via `world.run_startup()`         |
+| `SystemSchedule::Update`   | Every frame, via `world.run_update()`   |
 | `SystemSchedule::Shutdown` | On shutdown, via `world.run_shutdown()` |
 
 ## Running the Examples
