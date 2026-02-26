@@ -7,8 +7,8 @@ use super::{
 };
 
 pub struct Archetype {
-    pub components: HashMap<std::any::TypeId, ComponentList>,
-    pub entities: Vec<EntityId>,
+    pub(crate) components: HashMap<std::any::TypeId, ComponentList>,
+    pub(crate) entities: Vec<EntityId>,
 }
 
 pub type MovedEntity = HashMap<std::any::TypeId, Box<UnsafeCell<dyn Component>>>;
@@ -100,17 +100,19 @@ impl Archetype {
         self.entities.is_empty()
     }
 
-    pub fn get_component<T: Component + 'static>(&self, entity_index: u32) -> Option<*const T> {
+    pub fn get_component<T: Component + 'static>(&self, entity_id: EntityId) -> Option<*const T> {
+        let local_index = self.entities.iter().position(|&id| id == entity_id)?;
         let component_list = self.components.get(&std::any::TypeId::of::<T>())?;
-        component_list.get(entity_index as usize)
+        component_list.get(local_index)
     }
 
     pub fn get_component_mut<T: Component + 'static>(
         &self,
-        entity_index: u32,
+        entity_id: EntityId,
     ) -> Option<*mut T> {
+        let local_index = self.entities.iter().position(|&id| id == entity_id)?;
         let component_list = self.components.get(&std::any::TypeId::of::<T>())?;
-        component_list.get_mut(entity_index as usize)
+        component_list.get_mut(local_index)
     }
 }
 
@@ -131,5 +133,5 @@ fn test_archetype() {
 
     let (entity_id, moved_entity) = arch.migrate_entity_to_other_archetype(0).unwrap();
     assert_eq!(entity_id, 0);
-    assert_eq!(moved_entity.len(), 3);
+    assert_eq!(moved_entity.len(), 4); // Health + Position + Velocity + Entity
 }

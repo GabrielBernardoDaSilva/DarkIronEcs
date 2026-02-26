@@ -43,44 +43,32 @@ impl<T: 'static> AsAny for EventHandler<T> {
 
 pub struct EventManager {
     pub events: HashMap<TypeId, Box<dyn EventTrait>>,
-    pub world: std::ptr::NonNull<World>,
 }
 
 impl EventManager {
     pub fn new() -> Self {
         EventManager {
             events: HashMap::new(),
-            world: std::ptr::NonNull::dangling(),
         }
-    }
-
-    pub fn set_world(&mut self, world: *const World) {
-        self.world = std::ptr::NonNull::new(world as *mut World).unwrap();
     }
 
     pub fn subscribe<T: 'static>(&mut self, event: EventHandler<T>) {
         self.events.insert(TypeId::of::<T>(), Box::new(event));
     }
 
-    pub fn publish<T: 'static>(&mut self, t: T) {
+    pub fn publish<T: 'static>(&mut self, w: &World, t: T) {
         let event_opt = self.events.get_mut(&TypeId::of::<T>());
 
         if let Some(event) = event_opt {
             let event_handler = event.as_any().downcast_ref::<EventHandler<T>>().unwrap();
-            unsafe {
-                if self.world == std::ptr::NonNull::dangling() {
-                    panic!("World is not set in EventManager");
-                }
-                let world = self.world.as_ref();
-                event_handler.call(world, t);
-            }
+            event_handler.call(w, t);
         }
     }
 }
 
 impl SystemParam for &EventManager {
     fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
-        unsafe { &(*coordinator.borrow().get_event_manager()) }
+        unsafe { &(*coordinator.borrow().get_event_manager_mut()) }
     }
 }
 

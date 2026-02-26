@@ -4,225 +4,198 @@
       <img src='https://raw.githubusercontent.com/GabrielBernardoDaSilva/DarkIronEcs/master/logo/darkiron.png' alt='Dark Iron'/>
 </p>
 
+A lightweight and flexible Entity Component System (ECS) library for Rust.
+
 ## Features
 
 - **Entity Creation**: Easily create entities and attach components to them.
-- **Event Handling**: Implement event-driven architecture with custom events and event handlers.
-- **Coroutines**: Create a coroutine to be executed at specific intervals or delays.
-- **Queries**: Efficiently query entities based on their components.
-- **Systems**: Implement game logic and behaviors through systems that process entities based on queries.
-- **Extensions**: Extend the functionality of the ECS with custom extensions.
-- **Chained Building**: World could be create by a chain of methods.
-
-## Example
-
-Demonstrates how to use the `dark_iron_ecs` library to create an Entity Component System (ECS) in Rust. The example includes creating components, querying entities, and setting up systems to interact with those components.
+- **Component Queries**: Efficiently query entities based on their components, with support for exclusion constraints via `Without<T>`.
+- **Systems**: Implement game logic through systems that run on `Startup`, `Update`, or `Shutdown` schedules.
+- **Events**: Event-driven architecture with custom events and typed handlers.
+- **Coroutines**: Coroutines executed at specific intervals or delays, with named lifecycle management.
+- **Resources**: Globally accessible shared data, injectable directly into systems.
+- **Extensions**: Extend the world setup with reusable `Extension` implementations.
+- **Fluent Builder API**: World can be configured through a chain of methods.
 
 ## Setup
 
-First, add the `dark_iron_ecs` dependency to your `Cargo.toml`:
+Add `dark_iron_ecs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dark_iron_ecs = "*"  # Replace with the actual version
+dark_iron_ecs = "0.7.0"
 ```
 
-### Imports
-
-For this example the necessary imports:
+## Quick Example
 
 ```rust
 use dark_iron_ecs::core::{
-    coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds},
-    entity_manager::EntityManager,
-    extension::Extension,
-    query::{Query, Without},
-    resources::Resource,
-    system::SystemSchedule,
     world::World,
+    system::SystemSchedule,
+    query::Query,
 };
 
-```
-
-### Components
-
-Define your components. Components are data associated with entities.
-
-```rust
-struct Position {
-    x: f32,
-    y: f32,
-}
-
-struct Name(String);
-
+#[derive(Debug)]
 struct Health(i32);
-```
 
-### Systems
+#[derive(Debug)]
+struct Position { x: f32, y: f32 }
 
-Define systems to operate on entities that have specific components. Systems are functions that process entities.
-
-```rust
-fn test_system(q: Query<(&Health,)>, entity_manager: &mut EntityManager) {
-    entity_manager.create_entity((Health(500),));
-    for health in q.fetch() {
-        println!("{:?}", health.0);
+fn health_system(q: Query<(&Health,)>) {
+    for (health,) in q.fetch() {
+        println!("Health: {:?}", health.0);
     }
 }
-
-fn test_system_1(
-    q: Query<(&Health,)>,
-    q2: Query<(&Health,), Without<(&Name,)>>,
-    mut camera: Resource<Camera>,
-) {
-    for health in q.fetch() {
-        println!("q {:?}", health.0);
-    }
-
-    for health in q2.fetch() {
-        println!("q2 {:?}", health.0);
-    }
-
-    println!("Hello from test_system_1");
-    camera.x += 1.0;
-    println!("{:?} {:?} {:?}", camera.x, camera.y, camera.z);
-}
-```
-
-### Events
-
-Define events that can be published and subscribed to within the world.
-
-```rust
-struct CollisionEvent;
-```
-
-### Resources
-
-Define resources that are globally accessible by systems.
-
-```rust
-struct Camera {
-    x: f32,
-    y: f32,
-    z: f32,
-}
-```
-
-### Extension
-
-Define easy extensions to your world.
-
-```rust
-pub struct ExtensionExample;
-impl Extension for ExtensionExample {
-    fn build(&self, world: &mut World) {
-        world.create_entity((Health(100),));
-    }
-}
-```
-
-### Main Function
-
-Set up the world, create entities, add systems, and run the ECS.
-
-```rust
-use dark_iron_ecs::core::{
-    coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds},
-    entity_manager::EntityManager,
-    query::{Query, Without},
-    resources::Resource,
-    system::SystemSchedule,
-    world::World,
-};
 
 fn main() {
     let mut world = World::new();
 
-    let entity1 = world.create_entity_with_id((Health(100),));
-
-    let entity2 = world.create_entity_with_id((Name("Enemy 2".to_string()), Health(200)));
-
-    let entity3 = world.create_entity_with_id((
-        Position { x: 0.0, y: 0.0 },
-        Name("Enemy 3".to_string()),
-        Health(300),
-    ));
-
-    if let Some(health) = entity1.get_component::<Health>(&world){
-        println!("Component {:?}", health.0);
-    }
-
-    let mut counter = 10;
     world
-        .create_entity((Velocity(0.0, 0.0),))
-        .subscribe_event(|_world: &World, _t: CollisionEvent| {
-            println!("Collision Event Hit");
-        })
-        .remove_component::<Health>(entity3)
-        .add_component_to_entity(entity3, Health(400))
-        .add_coroutine(Coroutine::new("Test Coroutine", move |world| {
-            if counter == 10 {
-                println!("Coroutine Started");
-            }
+        .create_entity((Health(100), Position { x: 0.0, y: 0.0 }))
+        .create_entity((Health(200),))
+        .add_system(SystemSchedule::Update, health_system)
+        .run_startup();
 
-            counter -= 1;
-            if counter == 0 {
-                println!("Coroutine Finished");
-                world.remove_entity(entity3);
-                world.create_entity((Health(900),));
-                world.add_component_to_entity(entity1, Name("Player".to_string()));
-                world.remove_component::<Health>(entity2);
-                world.publish_event(CollisionEvent);
-                return CoroutineState::Finished;
-            }
+    world.run_update();
+}
+```
 
-            println!("Coroutine Running");
-            CoroutineState::Yielded(WaitAmountOfSeconds {
-                amount_in_seconds: 1.0,
-            })
-        }))
-        .add_resource(Camera {
-            x: 1000.0,
-            y: 0.0,
-            z: 0.0,
-        })
-        .add_system(SystemSchedule::Startup, test_system)
-        .add_systems(SystemSchedule::Update, (test_system_1,))
-        .run_startup()
-        .add_extension(ExtensionExample)
-        .build();
+## Components
 
-    let q = world.create_query::<&Health>();
-    let q1 = world.create_query_with_constraint::<&Health, Without<&Name>>();
+Any type can be used as a component — no derive or trait implementation required:
 
-    for health in q.fetch() {
-        println!("{:?}", health.0);
+```rust
+struct Position { x: f32, y: f32 }
+struct Name(String);
+struct Health(i32);
+```
+
+## Systems
+
+Systems are plain functions. Parameters are injected automatically — queries, resources, and managers are all valid system parameters:
+
+```rust
+use dark_iron_ecs::core::{
+    query::{Query, Without},
+    resources::Resource,
+    entity_manager::EntityManager,
+};
+
+fn movement_system(q: Query<(&mut Position, &Health)>) {
+    for (pos, health) in q.fetch() {
+        pos.x += 1.0;
+        println!("Health: {:?}", health.0);
     }
+}
 
-    for health in q1.fetch() {
-        println!("{:?}", health.0);
-    }
+fn spawn_system(entity_manager: &mut EntityManager) {
+    entity_manager.create_entity((Health(500),));
+}
 
-
-    loop {
-        world.run_update();
-        world.update_coroutines(1.0);
-        std::thread::sleep(std::time::Duration::from_secs(1));
+fn filtered_system(q: Query<(&Health,), Without<(&Name,)>>) {
+    for (health,) in q.fetch() {
+        println!("Entity without Name — Health: {:?}", health.0);
     }
 }
 ```
 
-### Running the Project
+## Events
 
-To run the project, use Cargo:
+```rust
+struct CollisionEvent;
 
-```bash
-cargo run
+fn setup(world: &mut World) {
+    world.subscribe_event(|_world: &World, _event: CollisionEvent| {
+        println!("Collision detected!");
+    });
+
+    // Later, publish the event:
+    world.publish_event(CollisionEvent);
+}
 ```
 
-This will compile and run your ECS example, demonstrating how to create and manage entities, components, systems, events, and resources using the dark_iron_ecs library.
+## Resources
+
+```rust
+struct Camera { x: f32, y: f32, z: f32 }
+
+fn camera_system(mut camera: Resource<Camera>) {
+    camera.x += 1.0;
+    println!("Camera: {} {} {}", camera.x, camera.y, camera.z);
+}
+
+fn setup(world: &mut World) {
+    world.add_resource(Camera { x: 0.0, y: 0.0, z: 0.0 });
+}
+```
+
+## Coroutines
+
+Coroutines are named and support yielding execution for a duration:
+
+```rust
+use dark_iron_ecs::core::coroutine::{Coroutine, CoroutineState, WaitAmountOfSeconds};
+
+let coroutine = Coroutine::new("my-coroutine", move |world| {
+    println!("Coroutine tick");
+    CoroutineState::Yielded(WaitAmountOfSeconds { amount_in_seconds: 1.0 })
+    // Return CoroutineState::Finished to stop
+});
+
+world.add_coroutine(coroutine);
+
+// Call every frame with delta time:
+world.update_coroutines(delta_time);
+```
+
+> Coroutine names must be unique — adding a duplicate name will panic.
+
+## Extensions
+
+Extensions are reusable world setup blocks:
+
+```rust
+use dark_iron_ecs::core::extension::Extension;
+
+pub struct PhysicsExtension;
+
+impl Extension for PhysicsExtension {
+    fn build(&self, world: &mut World) {
+        world.create_entity((Health(100),));
+        // register systems, resources, etc.
+    }
+}
+
+world.add_extension(PhysicsExtension).build();
+```
+
+## Entity Component Access
+
+Entities returned by `create_entity_with_id` can be used to access components directly:
+
+```rust
+let entity = world.create_entity_with_id((Health(100),));
+
+if let Some(health) = entity.get_component::<Health>(&world) {
+    println!("Health: {:?}", health.0);
+}
+```
+
+## System Schedules
+
+| Schedule | When it runs |
+|---|---|
+| `SystemSchedule::Startup` | Once, via `world.run_startup()` |
+| `SystemSchedule::Update` | Every frame, via `world.run_update()` |
+| `SystemSchedule::Shutdown` | On shutdown, via `world.run_shutdown()` |
+
+## Running the Examples
+
+```bash
+cargo run --example simple_query
+cargo run --example all_features
+cargo run --example benchmark
+```
 
 ## License
 

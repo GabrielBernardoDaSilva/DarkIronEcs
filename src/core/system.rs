@@ -100,7 +100,9 @@ impl SystemManager {
     pub fn run_startup_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Startup) {
             for system in systems.iter_mut() {
-                system(world.coordinator.clone().unwrap());
+                system(world.coordinator.clone().expect(
+                    "Coordinator not initialized - call World::new() before running systems",
+                ));
             }
         }
     }
@@ -108,7 +110,9 @@ impl SystemManager {
     pub fn run_update_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Update) {
             for system in systems.iter_mut() {
-                system(world.coordinator.clone().unwrap());
+                system(world.coordinator.clone().expect(
+                    "Coordinator not initialized - call World::new() before running systems",
+                ));
             }
         }
     }
@@ -116,7 +120,9 @@ impl SystemManager {
     pub fn run_shutdown_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Shutdown) {
             for system in systems.iter_mut() {
-                system(world.coordinator.clone().unwrap());
+                system(world.coordinator.clone().expect(
+                    "Coordinator not initialized - call World::new() before running systems",
+                ));
             }
         }
     }
@@ -124,7 +130,7 @@ impl SystemManager {
 
 impl SystemParam for &SystemManager {
     fn get_param(world: Rc<RefCell<Coordinator>>) -> Self {
-        unsafe { &(*world.borrow().get_system_manager()) }
+        unsafe { &(*world.borrow().get_system_manager_mut()) }
     }
 }
 
