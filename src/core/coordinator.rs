@@ -24,36 +24,20 @@ impl Coordinator {
         }
     }
 
-    pub(crate) unsafe fn get_entity_manager(&self) -> *const EntityManager {
-        self.entity_manager.as_ptr()
-    }
-
     pub(crate) unsafe fn get_entity_manager_mut(&self) -> *mut EntityManager {
         self.entity_manager.as_ptr()
     }
 
-    pub(crate) unsafe fn get_system_manager(&self) -> *const SystemManager {
+    pub(crate) unsafe fn get_system_manager_mut(&self) -> *mut SystemManager {
         self.system_manager.as_ptr()
-    }
-
-    pub(crate) unsafe fn get_event_manager(&self) -> *const EventManager {
-        self.event_manager.as_ptr()
     }
 
     pub(crate) unsafe fn get_event_manager_mut(&self) -> *mut EventManager {
         self.event_manager.as_ptr()
     }
 
-    pub(crate) unsafe fn get_resource_manager(&self) -> *const ResourceManager {
-        self.resources.as_ptr()
-    }
-
     pub(crate) unsafe fn get_resource_manager_mut(&self) -> *mut ResourceManager {
         self.resources.as_ptr()
-    }
-
-    pub(crate) unsafe fn get_coroutine_manager(&self) -> *const CoroutineManager {
-        self.coroutine_manager.as_ptr()
     }
 
     pub(crate) unsafe fn get_coroutine_manager_mut(&self) -> *mut CoroutineManager {

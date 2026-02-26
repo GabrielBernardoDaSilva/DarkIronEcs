@@ -84,6 +84,9 @@ impl CoroutineManager {
     }
 
     pub fn add_coroutine(&mut self, coroutine: Coroutine) {
+        if self.coroutines.iter().any(|c| c.name == coroutine.name) {
+            panic!("Coroutine with name '{}' already exists", coroutine.name);
+        }
         self.coroutines.push(coroutine);
     }
 
@@ -124,7 +127,7 @@ impl SystemParam for &CoroutineManager {
     fn get_param(
         coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
     ) -> Self {
-        unsafe { &(*coordinator.borrow().get_coroutine_manager()) }
+        unsafe { &(*coordinator.borrow().get_coroutine_manager_mut()) }
     }
 }
 

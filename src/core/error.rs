@@ -17,13 +17,18 @@ pub enum QueryError {
 
 impl std::fmt::Display for ArchetypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ArchetypeError")
+        match self {
+            ArchetypeError::EntityNotFound => write!(f, "ArchetypeError: entity not found"),
+        }
     }
 }
 
 impl std::fmt::Display for QueryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "QueryError")
+        match self {
+            QueryError::EntityNotFound(id) => write!(f, "QueryError: entity {} not found", id),
+            QueryError::ComponentNotFound(name) => write!(f, "QueryError: component '{}' not found", name),
+        }
     }
 }
 

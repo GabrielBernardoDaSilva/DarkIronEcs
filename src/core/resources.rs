@@ -11,7 +11,7 @@ use super::{as_any_trait::AsAny, coordinator::Coordinator, system::SystemParam};
 pub trait ResourceTrait: AsAny {}
 
 pub struct Resource<T: ?Sized> {
-    pub value: *const T,
+    value: *const T,
     pub type_id: std::any::TypeId,
     counter: Rc<RefCell<u32>>,
 }
@@ -117,7 +117,7 @@ impl ResourceManager {
 
 impl SystemParam for &ResourceManager {
     fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
-        unsafe { &(*coordinator.borrow().get_resource_manager()) }
+        unsafe { &(*coordinator.borrow().get_resource_manager_mut()) }
     }
 }
 

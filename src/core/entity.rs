@@ -19,14 +19,14 @@ impl Entity {
     pub fn get_component<T: 'static + Component>(&self, world: &World) -> Option<&T> {
         match world.entity_manager.borrow().get_component::<T>(*self) {
             Ok(component) => Some(unsafe { &*component }),
-            Err(e) => panic!("{:?}", e),
+            Err(_) => None,
         }
     }
 
-    pub fn get_component_mut<T: 'static + Component>(&self, world: &World) -> Option<&mut T> {
+    pub fn get_component_mut<T: 'static + Component>(&mut self, world: &World) -> Option<&mut T> {
         match world.entity_manager.borrow().get_component_mut::<T>(*self) {
             Ok(component) => Some(unsafe { &mut *component }),
-            Err(e) => panic!("{:?}", e),
+            Err(_) => None,
         }
     }
 }

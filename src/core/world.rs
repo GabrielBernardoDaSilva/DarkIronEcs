@@ -34,7 +34,6 @@ impl World {
             extensions: Rc::new(RefCell::new(Vec::new())),
             coordinator: None,
         };
-        world.event_manager.borrow_mut().set_world(&world);
 
         let coordinator = Coordinator::new(&world);
         world.coordinator = Some(Rc::new(RefCell::new(coordinator)));
@@ -74,7 +73,7 @@ impl World {
         self
     }
 
-    pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<T> {
+    pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<'a, T> {
         let entity_manager = self.entity_manager.clone();
         let archetype_ptr = unsafe { &(*entity_manager.as_ptr()).archetypes };
         Query::<T>::new(Pin::new(archetype_ptr))
@@ -82,7 +81,7 @@ impl World {
 
     pub fn create_query_with_constraint<'a, T: QueryParams<'a>, C: QueryConstraint>(
         &'a self,
-    ) -> Query<T, C> {
+    ) -> Query<'a, T, C> {
         let entity_manager = self.entity_manager.clone();
         let archetype_ptr = unsafe { &(*entity_manager.as_ptr()).archetypes };
         Query::<T, C>::new(Pin::new(archetype_ptr))
@@ -104,8 +103,7 @@ impl World {
         action: SystemSchedule,
         systems: impl SystemBundle<P>,
     ) -> &mut Self {
-        let system_manager = unsafe { &mut (*self.get_system_manager_mut()) };
-        systems.add_systems(action, system_manager);
+        systems.add_systems(action, &mut self.system_manager.borrow_mut());
         self
     }
     pub fn run_startup(&mut self) -> &mut Self {
@@ -121,16 +119,16 @@ impl World {
         self.system_manager.borrow_mut().run_shutdown_systems(self);
     }
 
-    pub(crate) unsafe fn get_system_manager_mut(&self) -> *mut SystemManager {
-        self.system_manager.as_ptr()
-    }
-
     pub fn publish_event<T: 'static>(&mut self, event: T) -> &mut Self {
-        self.event_manager.borrow_mut().publish(event);
+        let event_manager = self.event_manager.clone();
+        event_manager.borrow_mut().publish(self, event);
         self
     }
 
-    pub fn subscribe_event<T: 'static, FUNC: 'static + Fn(&World, T)>(&mut self, system: FUNC) -> &mut Self{
+    pub fn subscribe_event<T: 'static, FUNC: 'static + Fn(&World, T)>(
+        &mut self,
+        system: FUNC,
+    ) -> &mut Self {
         let event_handler = EventHandler::new(system);
         self.event_manager.borrow_mut().subscribe(event_handler);
         self
@@ -144,7 +142,7 @@ impl World {
         self.resources.borrow().get_resource::<T>()
     }
 
-    pub fn add_coroutine(&mut self, coroutine: Coroutine) -> &mut Self{
+    pub fn add_coroutine(&mut self, coroutine: Coroutine) -> &mut Self {
         self.coroutine_manager.borrow_mut().add_coroutine(coroutine);
         self
     }

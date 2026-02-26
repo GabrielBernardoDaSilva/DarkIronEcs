@@ -1,15 +1,14 @@
-use std::{cell::UnsafeCell, collections::HashMap};
+use std::{any::Any, cell::UnsafeCell, collections::HashMap};
 
 use super::entity::EntityId;
 
-pub trait Component {}
+pub trait Component: Any {}
+impl<T: Any> Component for T {}
 pub trait BundleComponent {
     fn create_map_components(self, entity_id: EntityId)
         -> HashMap<std::any::TypeId, ComponentList>;
     fn get_types_id(&self) -> Vec<std::any::TypeId>;
 }
-
-impl<T> Component for T {}
 
 pub struct ComponentList {
     pub components: Vec<Box<UnsafeCell<dyn Component>>>,
@@ -27,26 +26,15 @@ impl ComponentList {
     }
 
     pub fn get<T: Component + 'static>(&self, index: usize) -> Option<*const T> {
-        let component = self.components.get(index);
-        match component {
-            Some(component) => {
-                let ptr = component.get();
-                Some(ptr.cast::<T>())
-            }
-            None => None,
-        }
+        let component = self.components.get(index)?;
+        let any_ref: &dyn Any = unsafe { &*component.get() };
+        any_ref.downcast_ref::<T>().map(|comp| comp as *const T)
     }
 
     pub fn get_mut<T: Component + 'static>(&self, index: usize) -> Option<*mut T> {
-        let component = self.components.get(index);
-        match component {
-            Some(component) => {
-                let ptr = component.get();
-                Some(ptr.cast::<T>())
-                
-            }
-            None => None,
-        }
+        let component = self.components.get(index)?;
+        let any_ref: &mut dyn Any = unsafe { &mut *component.get() };
+        any_ref.downcast_mut::<T>().map(|comp| comp as *mut T)
     }
 
     pub fn remove(&mut self, index: usize) -> Box<UnsafeCell<dyn Component>> {
@@ -101,11 +89,18 @@ macro_rules! impl_bundle_component {
                     component_list.add($tail);
                     map.insert(std::any::TypeId::of::<$tail>(), component_list);
                 )*
+
+                let mut component_list = ComponentList::new();
+                component_list.add(super::entity::Entity::new(entity_id, 0));
+                map.insert(std::any::TypeId::of::<super::entity::Entity>(), component_list);
+
                 map
             }
 
             fn get_types_id(&self) -> Vec<std::any::TypeId> {
-                vec![std::any::TypeId::of::<$head>(), $(std::any::TypeId::of::<$tail>()),*]
+                vec![std::any::TypeId::of::<$head>(),
+                $(std::any::TypeId::of::<$tail>()),*,
+                std::any::TypeId::of::<super::entity::Entity>()]
             }
         }
     }
@@ -115,4 +110,3 @@ macro_rules! impl_bundle_component {
 impl_bundle_component!(
     A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
 );
-

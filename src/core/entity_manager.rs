@@ -11,13 +11,14 @@ use super::{
 pub struct EntityManager {
     pub entities: Vec<Entity>,
     pub archetypes: Vec<Archetype>,
+    next_entity_id: u32, // L6: contador monotônico — evita colisão de IDs após remoções
 }
 
 impl SystemParam for &EntityManager {
     fn get_param(
         coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
     ) -> Self {
-        unsafe { &*coordinator.borrow().get_entity_manager() }
+        unsafe { &*coordinator.borrow().get_entity_manager_mut() }
     }
 }
 
@@ -34,12 +35,14 @@ impl EntityManager {
         EntityManager {
             entities: Vec::new(),
             archetypes: Vec::new(),
+            next_entity_id: 0,
         }
     }
 
     pub fn create_entity(&mut self, components: impl BundleComponent) -> Entity {
         let mut types_ids = components.get_types_id();
-        let mut entity = Entity::new(self.entities.len() as u32, 0);
+        let mut entity = Entity::new(self.next_entity_id, 0);
+        self.next_entity_id += 1;
 
         types_ids.sort();
 
@@ -66,26 +69,34 @@ impl EntityManager {
     }
 
     pub fn remove_component<T: 'static + Component>(&mut self, entity: Entity) {
-        let entity_opt = self.entities.iter().find(|ent| ent.id == entity.id);
+        let entity_id = entity.id;
+        let location = match self.entities.iter().find(|e| e.id == entity_id) {
+            Some(e) => e.entity_location,
+            None => return,
+        };
 
-        if let Some(entity) = entity_opt {
-            let location = entity.entity_location;
-            let archetype = &mut self.archetypes[location];
-            let type_id = std::any::TypeId::of::<T>();
-            let mut entity_with_components = archetype
-                .migrate_entity_to_other_archetype(entity.id)
-                .unwrap();
-            entity_with_components.1.remove(&type_id);
+        let type_id = std::any::TypeId::of::<T>();
+        let mut entity_with_components = self.archetypes[location]
+            .migrate_entity_to_other_archetype(entity_id)
+            .unwrap();
+        entity_with_components.1.remove(&type_id);
 
-            if archetype.is_empty() {
-                self.archetypes.remove(location);
+        let archetype_empty = self.archetypes[location].is_empty();
+        if archetype_empty {
+            self.remove_archetype(location);
+        }
+
+        if entity_with_components.1.is_empty() {
+            if let Some(pos) = self.entities.iter().position(|e| e.id == entity_id) {
+                self.entities.remove(pos);
             }
-
-            if entity_with_components.1.is_empty() {
-                self.entities.remove(location);
-            } else {
-                self.move_entity_to_other_archetype(*entity, entity_with_components.1);
-            }
+        } else {
+            // Recria entity com location atualizado após possível remove_archetype
+            let updated = match self.entities.iter().find(|e| e.id == entity_id) {
+                Some(e) => *e,
+                None => return,
+            };
+            self.move_entity_to_other_archetype(updated, entity_with_components.1);
         }
     }
 
@@ -94,51 +105,74 @@ impl EntityManager {
         entity: Entity,
         component: T,
     ) {
-        let entity_opt = self.entities.iter().find(|ent| ent.id == entity.id);
-        if let Some(entity) = entity_opt {
-            let archetype = &mut self.archetypes[entity.entity_location];
-            let type_id = std::any::TypeId::of::<T>();
-            let mut entity_with_components = archetype
-                .migrate_entity_to_other_archetype(entity.id)
-                .unwrap();
-            entity_with_components
-                .1
-                .insert(type_id, Box::new(UnsafeCell::new(component)));
+        let entity_id = entity.id;
+        let location = match self.entities.iter().find(|e| e.id == entity_id) {
+            Some(e) => e.entity_location,
+            None => return,
+        };
 
-            if archetype.is_empty() {
-                self.archetypes.remove(entity.entity_location);
-            }
+        let type_id = std::any::TypeId::of::<T>();
+        let mut entity_with_components = self.archetypes[location]
+            .migrate_entity_to_other_archetype(entity_id)
+            .unwrap();
+        entity_with_components
+            .1
+            .insert(type_id, Box::new(UnsafeCell::new(component)));
 
-            self.move_entity_to_other_archetype(*entity, entity_with_components.1);
+        let archetype_empty = self.archetypes[location].is_empty();
+        if archetype_empty {
+            self.remove_archetype(location);
         }
+
+        let updated = match self.entities.iter().find(|e| e.id == entity_id) {
+            Some(e) => *e,
+            None => return,
+        };
+        self.move_entity_to_other_archetype(updated, entity_with_components.1);
     }
 
     pub fn remove_entity(&mut self, entity: Entity) {
-        let entity_opt = self.entities.iter().find(|ent| ent.id == entity.id);
-        if let Some(entity) = entity_opt {
-            let archetype = &mut self.archetypes[entity.entity_location];
-            archetype.remove_entity(entity.id).unwrap();
-            if archetype.is_empty() {
-                self.archetypes.remove(entity.entity_location);
-            }
-            self.entities.remove(entity.entity_location);
+        let entity_id = entity.id;
+        let location = match self.entities.iter().find(|e| e.id == entity_id) {
+            Some(e) => e.entity_location,
+            None => return,
+        };
+
+        self.archetypes[location].remove_entity(entity_id).unwrap();
+
+        if self.archetypes[location].is_empty() {
+            self.remove_archetype(location);
+        }
+
+        // C4/C5: busca posição pelo id, não pelo entity_location
+        if let Some(pos) = self.entities.iter().position(|e| e.id == entity_id) {
+            self.entities.remove(pos);
         }
     }
 
+    // C7: ordena as keys antes de comparar — HashMap não tem ordem definida
     fn move_entity_to_other_archetype(&mut self, entity: Entity, components: MovedEntity) {
-        let types_ids = components.keys().copied().collect::<Vec<_>>();
-        let archetype_index = self
-            .archetypes
-            .iter()
-            .position(|archetype| archetype.components.keys().eq(types_ids.iter()));
+        let mut types_ids = components.keys().copied().collect::<Vec<_>>();
+        types_ids.sort();
+
+        let archetype_index = self.archetypes.iter().position(|archetype| {
+            let mut arch_keys = archetype.components.keys().copied().collect::<Vec<_>>();
+            arch_keys.sort();
+            arch_keys == types_ids
+        });
 
         if let Some(archetype_index) = archetype_index {
             self.archetypes[archetype_index].add_entity_migrated(entity.id, components);
-            self.entities[entity.entity_location].entity_location = archetype_index;
+            if let Some(e) = self.entities.iter_mut().find(|e| e.id == entity.id) {
+                e.entity_location = archetype_index;
+            }
         } else {
             let archetype = Archetype::new_from_migration(entity.id, components);
             self.archetypes.push(archetype);
-            self.entities[entity.entity_location].entity_location = self.archetypes.len() - 1;
+            let new_idx = self.archetypes.len() - 1;
+            if let Some(e) = self.entities.iter_mut().find(|e| e.id == entity.id) {
+                e.entity_location = new_idx;
+            }
         }
     }
 
@@ -179,6 +213,15 @@ impl EntityManager {
             }
         } else {
             Err(QueryError::EntityNotFound(entity.id))
+        }
+    }
+
+    fn remove_archetype(&mut self, idx: usize) {
+        self.archetypes.remove(idx);
+        for entity in self.entities.iter_mut() {
+            if entity.entity_location > idx {
+                entity.entity_location -= 1;
+            }
         }
     }
 }

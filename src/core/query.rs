@@ -13,7 +13,7 @@ pub trait QueryParams<'a> {
     fn get_component_in_archetype(
         archetype: &'a Archetype,
         entity_location: u32,
-    ) -> Self::QueryResult;
+    ) -> Option<Self::QueryResult>;
 
     fn types_id() -> Vec<TypeId>;
 }
@@ -106,11 +106,8 @@ impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
     fn get_component_in_archetype(
         archetype: &'a Archetype,
         entity_location: u32,
-    ) -> Self::QueryResult {
-        match <T as Fetch<'a>>::fetch(archetype, entity_location) {
-            Ok(res) => res,
-            Err(e) => panic!("{:?}", e),
-        }
+    ) -> Option<Self::QueryResult> {
+        <T as Fetch>::fetch(archetype, entity_location).ok()
     }
 
     fn types_id() -> Vec<TypeId> {
@@ -129,11 +126,8 @@ macro_rules! impl_query_params {
         impl<'a, $head: Fetch<'a> + 'static> QueryParams<'a> for ($head,) {
             type QueryResult = $head::Result;
 
-            fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
-                match $head::fetch(archetype, entity_location){
-                    Ok(res) => res,
-                    Err(e) => panic!("{:?}", e)
-                }
+            fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Option<Self::QueryResult> {
+                $head::fetch(archetype, entity_location).ok()
             }
 
             fn types_id() -> Vec<TypeId> {
@@ -148,19 +142,11 @@ macro_rules! impl_query_params {
         impl<'a, $head: Fetch<'a>  + 'static, $($tail: Fetch<'a>  + 'static),+> QueryParams<'a> for ($head, $($tail),+) {
             type QueryResult = ($head::Result, $($tail::Result),+);
 
-            fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Self::QueryResult {
-                (
-                    match $head::fetch(archetype, entity_location){
-                        Ok(res) => res,
-                        Err(e) => panic!("{:?}", e)
-                    },
-                    $(
-                        match $tail::fetch(archetype, entity_location){
-                            Ok(res) => res,
-                            Err(e) => panic!("{:?}", e)
-                        }
-                    ),+
-                )
+            fn get_component_in_archetype(archetype: &'a Archetype, entity_location: u32) -> Option<Self::QueryResult> {
+                Some((
+                    $head::fetch(archetype, entity_location).ok()?,
+                    $($tail::fetch(archetype, entity_location).ok()?),+
+                ))
             }
             fn types_id() -> Vec<TypeId> {
                 let types = vec![<$head>::get_type_id(), $($tail::get_type_id()),+];
@@ -204,36 +190,6 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
             _marked: std::marker::PhantomData,
         }
     }
-    #[deprecated]
-    pub fn iter(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
-        let types = T::types_id();
-        let constraint_types = Constraint::constraint_types();
-        let mut components = Vec::new();
-
-        for arch in self.archetypes.iter() {
-            let has_any_entities = arch.entities.is_empty();
-            let is_archetype_components_bigger = types.len() > arch.components.len();
-            let contains_all = types
-                .iter()
-                .all(|type_id| -> bool { arch.has_type(*type_id) });
-            let has_constraint = constraint_types
-                .iter()
-                .any(|type_id| -> bool { arch.has_type(*type_id) });
-
-            if contains_all
-                && !has_any_entities
-                && !is_archetype_components_bigger
-                && !has_constraint
-            {
-                for (index, _) in arch.entities.iter().enumerate() {
-                    let component = T::get_component_in_archetype(arch, index as u32);
-                    components.push(component);
-                }
-            }
-        }
-        components
-    }
-
     pub fn fetch(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
         let types = T::types_id();
         let constraint_types = Constraint::constraint_types();
@@ -241,7 +197,7 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
 
         for arch in self.archetypes.iter() {
             let has_any_entities = arch.entities.is_empty();
-            let is_archetype_components_bigger = types.len() > arch.components.len();
+            let query_needs_more_types_than_archetype_has = types.len() > arch.components.len();
             let contains_all = types
                 .iter()
                 .all(|type_id| -> bool { arch.has_type(*type_id) });
@@ -251,12 +207,13 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
 
             if contains_all
                 && !has_any_entities
-                && !is_archetype_components_bigger
+                && !query_needs_more_types_than_archetype_has
                 && !has_constraint
             {
                 for (index, _) in arch.entities.iter().enumerate() {
-                    let component = T::get_component_in_archetype(arch, index as u32);
-                    components.push(component);
+                    if let Some(component) = T::get_component_in_archetype(arch, index as u32) {
+                        components.push(component);
+                    }
                 }
             }
         }
