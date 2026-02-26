@@ -23,7 +23,7 @@ Add `dark_iron_ecs` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dark_iron_ecs = "0.9.0"
+dark_iron_ecs = "0.9.5"
 ```
 
 ## Quick Example

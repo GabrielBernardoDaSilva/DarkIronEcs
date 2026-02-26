@@ -1,6 +1,6 @@
 [package]
 name = "dark_iron_ecs"
-version = "0.9.0"
+version = "0.9.5"
 edition = "2021"
 authors = ["Gabriel Bernardo"]
 license = "MIT"
