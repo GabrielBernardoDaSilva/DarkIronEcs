@@ -1,3 +1,4 @@
+use super::access::AccessKey;
 use super::archetype::Archetype;
 use super::coordinator::Coordinator;
 use super::error::QueryError;
@@ -8,6 +9,8 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 
+/// Implemented for types (and tuples of types, up to 26 elements) that a [`Query`] can fetch —
+/// `&T` and `&mut T` for any component `T`. You don't implement this yourself.
 pub trait QueryParams<'a> {
     type QueryResult;
     fn get_component_in_archetype(
@@ -16,8 +19,14 @@ pub trait QueryParams<'a> {
     ) -> Option<Self::QueryResult>;
 
     fn types_id() -> Vec<TypeId>;
+
+    /// Like [`QueryParams::types_id`], paired with whether each type is fetched mutably
+    /// (`&mut T`) or not (`&T`). Used to detect conflicting `SystemParam` accesses.
+    fn types_id_with_mutability() -> Vec<(TypeId, bool)>;
 }
 
+/// Filter applied to a [`Query`], excluding entities that match. The default `()` applies no
+/// filtering; use [`Without`] to exclude entities that have a given component.
 pub trait QueryConstraint {
     fn constraint_types() -> Vec<TypeId>;
 }
@@ -28,10 +37,23 @@ impl QueryConstraint for () {
     }
 }
 
+/// Implemented for types (and tuples of types) usable inside [`Without<T>`].
 pub trait Constraints {
     fn constraint_types() -> Vec<TypeId>;
 }
 
+/// A [`Query`] constraint that excludes entities having any of the component types in `T`.
+///
+/// ```
+/// # use dark_iron_ecs::core::query::{Query, Without};
+/// # struct Health(i32);
+/// # struct Name(String);
+/// fn system(q: Query<(&Health,), Without<(&Name,)>>) {
+///     for health in q.fetch() {
+///         println!("no Name — {}", health.0);
+///     }
+/// }
+/// ```
 pub struct Without<T: Constraints + 'static>(std::marker::PhantomData<T>);
 
 impl<T: Constraints> QueryConstraint for Without<T> {
@@ -46,15 +68,35 @@ impl Constraints for () {
     }
 }
 
+/// Reads entities that have every component type in `T` (and none of the types excluded by
+/// `Constraint`, see [`Without`]). Take one as a system parameter, or build one manually via
+/// [`World::create_query`](super::world::World::create_query).
+///
+/// ```
+/// # use dark_iron_ecs::core::query::Query;
+/// # struct Health(i32);
+/// fn system(q: Query<(&Health,)>) {
+///     for health in q.fetch() {
+///         println!("Health: {}", health.0);
+///     }
+/// }
+/// ```
 pub struct Query<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint = ()> {
     pub archetypes: Pin<&'a Vec<Archetype>>,
     _marked: std::marker::PhantomData<(T, Constraint)>,
 }
+
+/// Implemented for `&T` and `&mut T` (any component `T`), letting [`Query`] fetch either
+/// shared or exclusive access to a component.
 pub trait Fetch<'a> {
     type Result;
     fn fetch(archetype: &'a Archetype, entity_id: u32) -> Result<Self::Result, QueryError>;
 
     fn get_type_id() -> TypeId;
+
+    /// Whether this fetch requires mutable (`&mut T`) or shared (`&T`) access to the
+    /// component.
+    fn is_mutable() -> bool;
 }
 
 impl<'a, T: 'static> Fetch<'a> for &mut T {
@@ -77,6 +119,10 @@ impl<'a, T: 'static> Fetch<'a> for &mut T {
     fn get_type_id() -> TypeId {
         TypeId::of::<T>()
     }
+
+    fn is_mutable() -> bool {
+        true
+    }
 }
 
 impl<'a, T: 'static> Fetch<'a> for &T {
@@ -98,6 +144,10 @@ impl<'a, T: 'static> Fetch<'a> for &T {
     fn get_type_id() -> TypeId {
         TypeId::of::<T>()
     }
+
+    fn is_mutable() -> bool {
+        false
+    }
 }
 
 impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
@@ -112,6 +162,10 @@ impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
 
     fn types_id() -> Vec<TypeId> {
         vec![<T>::get_type_id()]
+    }
+
+    fn types_id_with_mutability() -> Vec<(TypeId, bool)> {
+        vec![(<T>::get_type_id(), <T>::is_mutable())]
     }
 }
 
@@ -133,6 +187,10 @@ macro_rules! impl_query_params {
             fn types_id() -> Vec<TypeId> {
                 vec![<$head>::get_type_id()]
             }
+
+            fn types_id_with_mutability() -> Vec<(TypeId, bool)> {
+                vec![(<$head>::get_type_id(), <$head>::is_mutable())]
+            }
         }
 
 
@@ -151,6 +209,13 @@ macro_rules! impl_query_params {
             fn types_id() -> Vec<TypeId> {
                 let types = vec![<$head>::get_type_id(), $($tail::get_type_id()),+];
                 types
+            }
+
+            fn types_id_with_mutability() -> Vec<(TypeId, bool)> {
+                vec![
+                    (<$head>::get_type_id(), <$head>::is_mutable()),
+                    $((<$tail>::get_type_id(), <$tail>::is_mutable())),+
+                ]
             }
         }
 
@@ -184,12 +249,17 @@ impl_query_constrains!(
 );
 
 impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T, Constraint> {
+    /// Builds a query over the given archetype list. Usually not called directly — prefer
+    /// [`World::create_query`](super::world::World::create_query) or taking a `Query` as a
+    /// system parameter.
     pub fn new(archetypes: Pin<&'a Vec<Archetype>>) -> Query<'a, T, Constraint> {
         Query {
             archetypes,
             _marked: std::marker::PhantomData,
         }
     }
+
+    /// Runs the query, returning one result per matching entity.
     pub fn fetch(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
         let types = T::types_id();
         let constraint_types = Constraint::constraint_types();
@@ -225,6 +295,23 @@ impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam
     for Query<'a, T, Constraint>
 {
     fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        {
+            let coordinator_ref = coordinator.borrow();
+            let mut tracker = coordinator_ref.access_tracker.borrow_mut();
+            // A query only reads the archetype layout, never restructures it, so it only
+            // needs the entity manager to stay stable — hence a shared (non-mutable) access.
+            // This still conflicts with a `&mut EntityManager` taken by the same system,
+            // since that could migrate/remove archetypes out from under this query.
+            tracker.track(
+                AccessKey::Manager(TypeId::of::<super::entity_manager::EntityManager>()),
+                false,
+                "EntityManager (via Query)",
+            );
+            for (type_id, mutable) in T::types_id_with_mutability() {
+                tracker.track(AccessKey::Component(type_id), mutable, "Query component");
+            }
+        }
+
         let entity_manager: Rc<RefCell<super::entity_manager::EntityManager>> =
             coordinator.borrow().entity_manager.clone();
         let ptr = entity_manager.as_ptr();

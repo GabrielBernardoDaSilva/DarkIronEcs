@@ -2,41 +2,55 @@ use std::{any::Any, cell::UnsafeCell, collections::HashMap};
 
 use super::entity::EntityId;
 
+/// Marker trait for any `'static` type usable as a component. Blanket-implemented for every
+/// such type, so no manual `impl` is needed.
 pub trait Component: Any {}
 impl<T: Any> Component for T {}
+
+/// Implemented for tuples of components (up to 26 elements), letting
+/// [`World::create_entity`](super::world::World::create_entity) and friends accept
+/// `(Health(100), Position(0, 0))`-style bundles directly.
 pub trait BundleComponent {
     fn create_map_components(self, entity_id: EntityId)
         -> HashMap<std::any::TypeId, ComponentList>;
     fn get_types_id(&self) -> Vec<std::any::TypeId>;
 }
 
+/// Column of same-type component values inside an [`Archetype`](super::archetype::Archetype),
+/// indexed in parallel with that archetype's entity list.
 pub struct ComponentList {
     pub components: Vec<Box<UnsafeCell<dyn Component>>>,
 }
 
 impl ComponentList {
+    /// Creates an empty column.
     pub fn new() -> Self {
         Self {
             components: Vec::new(),
         }
     }
 
+    /// Appends `component` to the column.
     pub fn add<T: Component + 'static>(&mut self, component: T) {
         self.components.push(Box::new(UnsafeCell::new(component)));
     }
 
+    /// Returns a raw pointer to the component at `index`, or `None` if out of bounds or the
+    /// stored value isn't of type `T`.
     pub fn get<T: Component + 'static>(&self, index: usize) -> Option<*const T> {
         let component = self.components.get(index)?;
         let any_ref: &dyn Any = unsafe { &*component.get() };
         any_ref.downcast_ref::<T>().map(|comp| comp as *const T)
     }
 
+    /// Mutable counterpart to [`ComponentList::get`].
     pub fn get_mut<T: Component + 'static>(&self, index: usize) -> Option<*mut T> {
         let component = self.components.get(index)?;
         let any_ref: &mut dyn Any = unsafe { &mut *component.get() };
         any_ref.downcast_mut::<T>().map(|comp| comp as *mut T)
     }
 
+    /// Removes and returns the component at `index`.
     pub fn remove(&mut self, index: usize) -> Box<UnsafeCell<dyn Component>> {
         self.components.remove(index)
     }

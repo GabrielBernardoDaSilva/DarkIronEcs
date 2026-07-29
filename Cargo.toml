@@ -31,3 +31,7 @@ path = "examples/simple_query.rs"
 [[example]]
 name = "event_bus"
 path = "examples/event_bus.rs"
+
+[[example]]
+name = "system_param_conflicts"
+path = "examples/system_param_conflicts.rs"

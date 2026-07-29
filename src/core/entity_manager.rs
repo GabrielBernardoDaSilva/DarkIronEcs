@@ -1,6 +1,7 @@
-use std::cell::UnsafeCell;
+use std::{any::TypeId, cell::UnsafeCell};
 
 use super::{
+    access::AccessKey,
     archetype::{Archetype, MovedEntity},
     component::{BundleComponent, Component},
     entity::Entity,
@@ -8,6 +9,9 @@ use super::{
     system::SystemParam,
 };
 
+/// Owns every entity and its components, grouped into [`Archetype`]s by component-type
+/// signature. Most callers interact with it indirectly through [`World`](super::world::World)
+/// rather than directly.
 pub struct EntityManager {
     pub entities: Vec<Entity>,
     pub archetypes: Vec<Archetype>,
@@ -18,6 +22,11 @@ impl SystemParam for &EntityManager {
     fn get_param(
         coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
     ) -> Self {
+        coordinator.borrow().access_tracker.borrow_mut().track(
+            AccessKey::Manager(TypeId::of::<EntityManager>()),
+            false,
+            "EntityManager",
+        );
         unsafe { &*coordinator.borrow().get_entity_manager_mut() }
     }
 }
@@ -26,11 +35,17 @@ impl SystemParam for &mut EntityManager {
     fn get_param(
         coordinator: std::rc::Rc<std::cell::RefCell<super::coordinator::Coordinator>>,
     ) -> Self {
+        coordinator.borrow().access_tracker.borrow_mut().track(
+            AccessKey::Manager(TypeId::of::<EntityManager>()),
+            true,
+            "EntityManager",
+        );
         unsafe { &mut *coordinator.borrow().get_entity_manager_mut() }
     }
 }
 
 impl EntityManager {
+    /// Creates an empty manager with no entities.
     pub fn new() -> Self {
         EntityManager {
             entities: Vec::new(),
@@ -39,6 +54,8 @@ impl EntityManager {
         }
     }
 
+    /// Spawns a new entity with the given bundle of components, placing it in the matching
+    /// archetype (creating one if none matches yet), and returns its [`Entity`] id.
     pub fn create_entity(&mut self, components: impl BundleComponent) -> Entity {
         let mut types_ids = components.get_types_id();
         let mut entity = Entity::new(self.next_entity_id, 0);
@@ -68,6 +85,9 @@ impl EntityManager {
         entity
     }
 
+    /// Removes component `T` from `entity`, migrating it to the matching archetype (or
+    /// removing the entity entirely if it has no components left). No-op if `entity` doesn't
+    /// exist.
     pub fn remove_component<T: 'static + Component>(&mut self, entity: Entity) {
         let entity_id = entity.id;
         let location = match self.entities.iter().find(|e| e.id == entity_id) {
@@ -100,6 +120,8 @@ impl EntityManager {
         }
     }
 
+    /// Adds (or replaces) component `T` on `entity`, migrating it to the matching archetype.
+    /// No-op if `entity` doesn't exist.
     pub fn add_component_to_entity<T: 'static + Component>(
         &mut self,
         entity: Entity,
@@ -131,6 +153,7 @@ impl EntityManager {
         self.move_entity_to_other_archetype(updated, entity_with_components.1);
     }
 
+    /// Removes `entity` and all of its components. No-op if `entity` doesn't exist.
     pub fn remove_entity(&mut self, entity: Entity) {
         let entity_id = entity.id;
         let location = match self.entities.iter().find(|e| e.id == entity_id) {
@@ -176,6 +199,8 @@ impl EntityManager {
         }
     }
 
+    /// Returns a raw pointer to `entity`'s component `T`, or a [`QueryError`] if either the
+    /// entity or the component doesn't exist.
     pub fn get_component<T: 'static + Component>(
         &self,
         entity: Entity,
@@ -196,6 +221,7 @@ impl EntityManager {
         }
     }
 
+    /// Mutable counterpart to [`EntityManager::get_component`].
     pub fn get_component_mut<T: 'static + Component>(
         &self,
         entity: Entity,

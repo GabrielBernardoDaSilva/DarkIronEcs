@@ -1,8 +1,11 @@
 use std::collections::HashMap;
-use std::{cell::RefCell, rc::Rc};
+use std::{any::TypeId, cell::RefCell, rc::Rc};
 
-use super::{coordinator::Coordinator, world::World};
+use super::{access::AccessKey, coordinator::Coordinator, world::World};
 
+/// When a system runs, relative to [`World::run_startup`](super::world::World::run_startup),
+/// [`World::run_update`](super::world::World::run_update) and
+/// [`World::run_shutdown`](super::world::World::run_shutdown).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SystemSchedule {
     Startup,
@@ -10,14 +13,22 @@ pub enum SystemSchedule {
     Shutdown,
 }
 
+/// Implemented for every type a system function can take as an argument (e.g.
+/// `&EntityManager`, `Query<...>`, `Resource<T>`). Implementors fetch themselves from the
+/// [`Coordinator`] shared by every system, so systems never need a direct reference to
+/// [`World`].
 pub trait SystemParam {
     fn get_param(coordinator: Rc<RefCell<Coordinator>>) -> Self;
 }
 
+/// Implemented for plain functions/closures whose arguments are all [`SystemParam`]s (up to 26
+/// of them), letting them be registered via
+/// [`World::add_system`](super::world::World::add_system).
 pub trait System<P> {
     fn run(&self, coordinator: Rc<RefCell<Coordinator>>);
 }
 
+/// Converts a [`System`] into the boxed, type-erased closure form stored by [`SystemManager`].
 pub trait IntoSystem<P> {
     fn system(self) -> Box<dyn FnMut(Rc<RefCell<Coordinator>>)>;
 }
@@ -35,12 +46,13 @@ macro_rules! impl_system {
     ( $head:ident ) => {
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
-        impl<'a, Func, $head> System<($head,)> for Func
+        impl<Func, $head> System<($head,)> for Func
         where
             Func: Fn($head),
             $head: SystemParam,
         {
             fn run(&self, coordinator: Rc<RefCell<Coordinator>>) {
+                coordinator.borrow().access_tracker.borrow_mut().clear();
                 let $head = $head::get_param(coordinator.clone());
                 self($head);
             }
@@ -54,14 +66,14 @@ macro_rules! impl_system {
 
         #[allow(non_snake_case)]
         #[allow(unused_variables)]
-        impl<'a, Func, $head, $($tail,)*> System<($head, $($tail,)*)> for Func
+        impl<Func, $head, $($tail,)*> System<($head, $($tail,)*)> for Func
         where
             Func: Fn($head, $($tail),*),
             $head: SystemParam,
             $($tail: SystemParam,)*
         {
             fn run(&self, coordinator: Rc<RefCell<Coordinator>>) {
-
+                coordinator.borrow().access_tracker.borrow_mut().clear();
                 let $head = $head::get_param(coordinator.clone());
                 $(
                     let $tail = $tail::get_param(coordinator.clone());
@@ -76,17 +88,21 @@ impl_system!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W
 
 type SystemFunctionMap = HashMap<SystemSchedule, Vec<Box<dyn FnMut(Rc<RefCell<Coordinator>>)>>>;
 
+/// Owns every registered system, grouped by [`SystemSchedule`]. Most callers interact with it
+/// indirectly through [`World`] rather than directly.
 pub struct SystemManager {
     pub systems: SystemFunctionMap,
 }
 
 impl SystemManager {
+    /// Creates an empty manager with no systems registered.
     pub fn new() -> Self {
         SystemManager {
             systems: HashMap::new(),
         }
     }
 
+    /// Registers `system` to run during `system_schedule`.
     pub fn add_system<P, F>(&mut self, system_schedule: SystemSchedule, system: F)
     where
         F: IntoSystem<P>,
@@ -97,6 +113,7 @@ impl SystemManager {
             .push(system.system());
     }
 
+    /// Runs every system registered under [`SystemSchedule::Startup`].
     pub fn run_startup_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Startup) {
             for system in systems.iter_mut() {
@@ -107,6 +124,7 @@ impl SystemManager {
         }
     }
 
+    /// Runs every system registered under [`SystemSchedule::Update`].
     pub fn run_update_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Update) {
             for system in systems.iter_mut() {
@@ -117,6 +135,7 @@ impl SystemManager {
         }
     }
 
+    /// Runs every system registered under [`SystemSchedule::Shutdown`].
     pub fn run_shutdown_systems(&mut self, world: &World) {
         if let Some(systems) = self.systems.get_mut(&SystemSchedule::Shutdown) {
             for system in systems.iter_mut() {
@@ -130,10 +149,18 @@ impl SystemManager {
 
 impl SystemParam for &SystemManager {
     fn get_param(world: Rc<RefCell<Coordinator>>) -> Self {
+        world.borrow().access_tracker.borrow_mut().track(
+            AccessKey::Manager(TypeId::of::<SystemManager>()),
+            false,
+            "SystemManager",
+        );
         unsafe { &(*world.borrow().get_system_manager_mut()) }
     }
 }
 
+/// Implemented for tuples of [`IntoSystem`]s (up to 26 elements), letting
+/// [`World::add_systems`](super::world::World::add_systems) register several systems for the
+/// same schedule in one call.
 pub trait SystemBundle<P> {
     fn add_systems(self, system_schedule: SystemSchedule, system_manager: &mut SystemManager);
 }

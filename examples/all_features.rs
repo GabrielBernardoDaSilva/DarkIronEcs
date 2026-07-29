@@ -22,8 +22,11 @@ struct Health(i32);
 
 struct Velocity(f32, f32);
 
-fn test_system(q: Query<(&Health,)>, entity_manager: &mut EntityManager) {
+fn spawn_health_system(entity_manager: &mut EntityManager) {
     entity_manager.create_entity((Health(500),));
+}
+
+fn print_health_system(q: Query<(&Health,)>) {
     for health in q.fetch() {
         println!("{:?}", health.0);
     }
@@ -113,7 +116,10 @@ fn main() {
             y: 0.0,
             z: 0.0,
         })
-        .add_system(SystemSchedule::Startup, test_system)
+        .add_systems(
+            SystemSchedule::Startup,
+            (spawn_health_system, print_health_system),
+        )
         .add_systems(SystemSchedule::Update, (test_system_1,))
         .run_startup()
         .add_extension(ExtensionExample)

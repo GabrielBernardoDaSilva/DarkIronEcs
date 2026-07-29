@@ -42,7 +42,7 @@ struct Health(i32);
 struct Position { x: f32, y: f32 }
 
 fn health_system(q: Query<(&Health,)>) {
-    for (health,) in q.fetch() {
+    for health in q.fetch() {
         println!("Health: {:?}", health.0);
     }
 }
@@ -93,7 +93,7 @@ fn spawn_system(entity_manager: &mut EntityManager) {
 }
 
 fn filtered_system(q: Query<(&Health,), Without<(&Name,)>>) {
-    for (health,) in q.fetch() {
+    for health in q.fetch() {
         println!("Entity without Name — Health: {:?}", health.0);
     }
 }

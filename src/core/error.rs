@@ -2,14 +2,20 @@ use std::{error::Error, fmt::Debug};
 
 use super::entity::EntityId;
 
+/// Errors returned by [`Archetype`](super::archetype::Archetype) operations.
 #[derive(Debug)]
 pub enum ArchetypeError {
+    /// The entity isn't present in the archetype.
     EntityNotFound,
 }
 
+/// Errors returned when looking up an entity's component, e.g. via
+/// [`Entity::get_component`](super::entity::Entity::get_component) or a [`Query`](super::query::Query).
 #[derive(Debug)]
 pub enum QueryError {
+    /// No entity with this id exists.
     EntityNotFound(EntityId),
+    /// The entity exists but doesn't have a component of this type.
     ComponentNotFound(String)
 }
 

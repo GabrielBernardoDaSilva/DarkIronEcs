@@ -1,19 +1,25 @@
 use std::{cell::RefCell, rc::Rc};
 
 use super::{
-    coroutine::CoroutineManager, entity_manager::EntityManager, event::EventManager,
-    resources::ResourceManager, system::SystemManager, world::World,
+    access::AccessTracker, coroutine::CoroutineManager, entity_manager::EntityManager,
+    event::EventManager, resources::ResourceManager, system::SystemManager, world::World,
 };
 
+/// A lightweight, cloneable handle to every manager owned by a [`World`], passed to systems
+/// instead of the `World` itself so a system's parameters (see [`SystemParam`](super::system::SystemParam))
+/// can each fetch just the manager they need.
 pub struct Coordinator {
     pub entity_manager: Rc<RefCell<EntityManager>>,
     pub system_manager: Rc<RefCell<SystemManager>>,
     pub event_manager: Rc<RefCell<EventManager>>,
     pub resources: Rc<RefCell<ResourceManager>>,
     pub coroutine_manager: Rc<RefCell<CoroutineManager>>,
+    pub(crate) access_tracker: RefCell<AccessTracker>,
 }
 
 impl Coordinator {
+    /// Builds a `Coordinator` sharing `world`'s managers. Called once by
+    /// [`World::new`](super::world::World::new); not normally constructed directly.
     pub fn new(world: &World) -> Self {
         Self {
             entity_manager: world.entity_manager.clone(),
@@ -21,6 +27,7 @@ impl Coordinator {
             event_manager: world.event_manager.clone(),
             resources: world.resources.clone(),
             coroutine_manager: world.coroutine_manager.clone(),
+            access_tracker: RefCell::new(AccessTracker::default()),
         }
     }
 
