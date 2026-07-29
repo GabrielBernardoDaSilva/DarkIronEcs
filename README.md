@@ -114,6 +114,34 @@ fn setup(world: &mut World) {
 }
 ```
 
+`EventManager` is also available as a system param, so systems can subscribe/publish without needing `&World` at all:
+
+```rust
+use dark_iron_ecs::core::{event::EventManager, system::SystemSchedule};
+
+struct FireEvent(u32);
+
+fn build_up_world(event_bus: &mut EventManager) {
+    event_bus.subscribe_event(|_world: &World, event: FireEvent| {
+        println!("FireEvent: {}", event.0);
+    });
+}
+
+fn fire_event_system(event_bus: &mut EventManager) {
+    event_bus.publish(FireEvent(1));
+}
+
+fn main() {
+    World::default()
+        .add_system(SystemSchedule::Startup, build_up_world)
+        .add_systems(SystemSchedule::Update, (fire_event_system,))
+        .run_startup()
+        .run_update();
+}
+```
+
+See `examples/event_bus.rs` for the full runnable version.
+
 ## Resources
 
 ```rust

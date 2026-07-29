@@ -28,15 +28,19 @@ impl World {
         let mut world = Self {
             entity_manager: Rc::new(RefCell::new(EntityManager::new())),
             system_manager: Rc::new(RefCell::new(SystemManager::new())),
-            event_manager: Rc::new(RefCell::new(EventManager::new())),
+            event_manager: Rc::new(RefCell::new(EventManager::default())),
             resources: Rc::new(RefCell::new(ResourceManager::new())),
             coroutine_manager: Rc::new(RefCell::new(CoroutineManager::new())),
             extensions: Rc::new(RefCell::new(Vec::new())),
             coordinator: None,
         };
 
-        let coordinator = Coordinator::new(&world);
-        world.coordinator = Some(Rc::new(RefCell::new(coordinator)));
+        let coordinator = Rc::new(RefCell::new(Coordinator::new(&world)));
+        world
+            .event_manager
+            .borrow_mut()
+            .bind_coordinator(Rc::downgrade(&coordinator));
+        world.coordinator = Some(coordinator);
 
         world
     }
@@ -121,7 +125,7 @@ impl World {
 
     pub fn publish_event<T: 'static>(&mut self, event: T) -> &mut Self {
         let event_manager = self.event_manager.clone();
-        event_manager.borrow_mut().publish(self, event);
+        event_manager.borrow().publish(event);
         self
     }
 
@@ -172,6 +176,29 @@ impl World {
             extension.build(self);
         }
         self
+    }
+
+    pub(crate) fn from_coordinator(coordinator: Rc<RefCell<Coordinator>>) -> Self {
+        let (entity_manager, system_manager, event_manager, resources, coroutine_manager) = {
+            let c = coordinator.borrow();
+            (
+                c.entity_manager.clone(),
+                c.system_manager.clone(),
+                c.event_manager.clone(),
+                c.resources.clone(),
+                c.coroutine_manager.clone(),
+            )
+        };
+
+        World {
+            entity_manager,
+            system_manager,
+            event_manager,
+            resources,
+            coroutine_manager,
+            extensions: Rc::new(RefCell::new(Vec::new())),
+            coordinator: Some(coordinator),
+        }
     }
 }
 
