@@ -52,6 +52,7 @@ impl EntityManager {
             entities: Vec::new(),
             archetypes: Vec::new(),
             next_entity_id: 0,
+            archetype_version: 0,
         }
     }
 
