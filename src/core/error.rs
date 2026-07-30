@@ -16,10 +16,8 @@ pub enum QueryError {
     /// No entity with this id exists.
     EntityNotFound(EntityId),
     /// The entity exists but doesn't have a component of this type.
-    ComponentNotFound(String)
+    ComponentNotFound(String),
 }
-
-
 
 impl std::fmt::Display for ArchetypeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -33,11 +31,12 @@ impl std::fmt::Display for QueryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             QueryError::EntityNotFound(id) => write!(f, "QueryError: entity {} not found", id),
-            QueryError::ComponentNotFound(name) => write!(f, "QueryError: component '{}' not found", name),
+            QueryError::ComponentNotFound(name) => {
+                write!(f, "QueryError: component '{}' not found", name)
+            }
         }
     }
 }
-
 
 impl Error for ArchetypeError {}
 impl Error for QueryError {}

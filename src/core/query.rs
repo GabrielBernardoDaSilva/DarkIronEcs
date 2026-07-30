@@ -9,6 +9,30 @@ use std::cell::{RefCell, UnsafeCell};
 use std::pin::Pin;
 use std::rc::Rc;
 
+#[derive(PartialEq, Eq, Hash, Clone)]
+pub(crate) struct QuerySignature {
+    required: Vec<TypeId>,
+    excluded: Vec<TypeId>,
+    present_only: Vec<TypeId>,
+}
+
+impl QuerySignature {
+    pub fn new(
+        mut required: Vec<TypeId>,
+        mut excluded: Vec<TypeId>,
+        mut present_only: Vec<TypeId>,
+    ) -> Self {
+        required.sort();
+        excluded.sort();
+        present_only.sort();
+        QuerySignature {
+            required,
+            excluded,
+            present_only,
+        }
+    }
+}
+
 /// Implemented for types (and tuples of types, up to 26 elements) that a [`Query`] can fetch —
 /// `&T` and `&mut T` for any component `T`. You don't implement this yourself.
 pub trait QueryParams<'a> {

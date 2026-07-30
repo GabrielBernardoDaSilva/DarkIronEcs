@@ -1,4 +1,10 @@
-use std::{any::TypeId, cell::UnsafeCell};
+use std::{
+    any::TypeId,
+    cell::{RefCell, UnsafeCell},
+    collections::HashMap,
+};
+
+use crate::core::query::QuerySignature;
 
 use super::{
     access::AccessKey,
@@ -17,6 +23,7 @@ pub struct EntityManager {
     pub archetypes: Vec<Archetype>,
     next_entity_id: u32, // L6: Monotomic Incrementing Counter
     pub(crate) archetype_version: u64,
+    pub(crate) query_cache: RefCell<HashMap<QuerySignature, (u64, Vec<usize>)>>,
 }
 
 impl SystemParam for &EntityManager {
@@ -53,6 +60,7 @@ impl EntityManager {
             archetypes: Vec::new(),
             next_entity_id: 0,
             archetype_version: 0,
+            query_cache: RefCell::new(HashMap::new()),
         }
     }
 
@@ -364,5 +372,18 @@ pub mod storage_regression_test {
         em.remove_component::<B>(e1);
 
         assert!(em.archetype_version > v_before);
+    }
+
+    #[test]
+    fn query_cache_field_starts_empty_and_round_trips_an_entry() {
+        let em = EntityManager::new();
+        assert!(em.query_cache.borrow().is_empty());
+
+        let sig = crate::core::query::QuerySignature::new(vec![], vec![], vec![]);
+        em.query_cache
+            .borrow_mut()
+            .insert(sig.clone(), (0, vec![1, 2]));
+
+        assert_eq!(em.query_cache.borrow().get(&sig), Some(&(0, vec![1, 2])));
     }
 }
