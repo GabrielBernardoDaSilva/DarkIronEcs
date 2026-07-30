@@ -1,11 +1,12 @@
 [package]
 name = "dark_iron_ecs"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2024"
 authors = ["Gabriel Bernardo"]
 license = "MIT"
 description = "A simple Entity Component System library for Rust"
 repository = "https://github.com/GabrielBernardoDaSilva/DarkIronEcs"
+documentation = "https://docs.rs/dark_iron_ecs"
 keywords = ["ecs", "game-development", "data-oriented-design"]
 categories = ["development-tools", "game-development"]
 readme = "README.md"
