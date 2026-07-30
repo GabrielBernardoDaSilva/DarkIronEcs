@@ -137,9 +137,11 @@ impl EntityManager {
         let mut entity_with_components = self.archetypes[location]
             .migrate_entity_to_other_archetype(entity_id)
             .unwrap();
-        entity_with_components
-            .1
-            .insert(type_id, Box::new(UnsafeCell::new(component)));
+        entity_with_components.1.insert(
+            type_id,
+            Box::new(UnsafeCell::new(vec![component]))
+                as Box<dyn super::component::ComponentColumn>,
+        );
 
         let archetype_empty = self.archetypes[location].is_empty();
         if archetype_empty {

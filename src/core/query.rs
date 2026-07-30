@@ -2,11 +2,10 @@ use super::access::AccessKey;
 use super::archetype::Archetype;
 use super::coordinator::Coordinator;
 use super::error::QueryError;
-use crate::core::component::ComponentList;
 use crate::core::system::SystemParam;
 
 use std::any::TypeId;
-use std::cell::RefCell;
+use std::cell::{RefCell, UnsafeCell};
 use std::pin::Pin;
 use std::rc::Rc;
 
@@ -20,7 +19,7 @@ pub trait QueryParams<'a> {
     /// [`QueryParams::get_component_from_source`], instead of re-resolving on every entity.
     type Source;
 
-    /// Resolves this query's `ComponentList`(s) for `archetype`. Returns `None` if the
+    /// Resolves this query's component column(s) for `archetype`. Returns `None` if the
     /// archetype is missing a required type.
     fn resolve(archetype: &'a Archetype) -> Option<Self::Source>;
 
@@ -136,13 +135,16 @@ pub struct Query<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint =
 /// shared or exclusive access to a component.
 pub trait Fetch<'a> {
     type Result;
+    /// Always a reference, so it's cheap to copy out of `&Self::Source` when reading it once
+    /// per entity.
+    type Source: Copy;
 
-    /// Resolves the `ComponentList` this fetch reads from, once per archetype instead of once
+    /// Resolves the component column this fetch reads from, once per archetype instead of once
     /// per entity. Returns `None` if the archetype doesn't have this component type.
-    fn resolve(archetype: &'a Archetype) -> Option<&'a ComponentList>;
+    fn resolve(archetype: &'a Archetype) -> Option<Self::Source>;
 
-    /// Reads this fetch's result for one entity from an already-`resolve`d `ComponentList`.
-    fn fetch_from(list: &'a ComponentList, entity_id: u32) -> Result<Self::Result, QueryError>;
+    /// Reads this fetch's result for one entity from an already-`resolve`d `Source`.
+    fn fetch_from(source: Self::Source, entity_id: u32) -> Result<Self::Result, QueryError>;
 
     fn get_type_id() -> TypeId;
 
@@ -153,14 +155,20 @@ pub trait Fetch<'a> {
 
 impl<'a, T: 'static> Fetch<'a> for &mut T {
     type Result = Self;
+    type Source = &'a UnsafeCell<Vec<T>>;
 
-    fn resolve(archetype: &'a Archetype) -> Option<&'a ComponentList> {
-        archetype.components.get(&TypeId::of::<T>())
+    fn resolve(archetype: &'a Archetype) -> Option<Self::Source> {
+        archetype
+            .components
+            .get(&TypeId::of::<T>())?
+            .as_any()
+            .downcast_ref() as _
     }
 
-    fn fetch_from(list: &'a ComponentList, entity_id: u32) -> Result<Self::Result, QueryError> {
+    fn fetch_from(source: Self::Source, entity_id: u32) -> Result<Self::Result, QueryError> {
+        let list = unsafe { &mut *source.get() };
         match list.get_mut(entity_id as usize) {
-            Some(c) => Ok(unsafe { &mut *c }),
+            Some(c) => Ok(c),
             None => Err(QueryError::EntityNotFound(entity_id)),
         }
     }
@@ -176,14 +184,20 @@ impl<'a, T: 'static> Fetch<'a> for &mut T {
 
 impl<'a, T: 'static> Fetch<'a> for &T {
     type Result = Self;
+    type Source = &'a UnsafeCell<Vec<T>>;
 
-    fn resolve(archetype: &'a Archetype) -> Option<&'a ComponentList> {
-        archetype.components.get(&TypeId::of::<T>())
+    fn resolve(archetype: &'a Archetype) -> Option<Self::Source> {
+        archetype
+            .components
+            .get(&TypeId::of::<T>())?
+            .as_any()
+            .downcast_ref()
     }
 
-    fn fetch_from(list: &'a ComponentList, entity_id: u32) -> Result<Self::Result, QueryError> {
+    fn fetch_from(source: Self::Source, entity_id: u32) -> Result<Self::Result, QueryError> {
+        let list = unsafe { &*source.get() };
         match list.get(entity_id as usize) {
-            Some(c) => Ok(unsafe { &*c }),
+            Some(c) => Ok(c),
             None => Err(QueryError::EntityNotFound(entity_id)),
         }
     }
@@ -199,7 +213,7 @@ impl<'a, T: 'static> Fetch<'a> for &T {
 
 impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
     type QueryResult = T::Result;
-    type Source = &'a ComponentList;
+    type Source = <T as Fetch<'a>>::Source;
 
     fn resolve(archetype: &'a Archetype) -> Option<Self::Source> {
         <T as Fetch>::resolve(archetype)
@@ -209,7 +223,7 @@ impl<'a, T: Fetch<'a> + 'static> QueryParams<'a> for T {
         source: &Self::Source,
         entity_location: u32,
     ) -> Option<Self::QueryResult> {
-        <T as Fetch>::fetch_from(source, entity_location).ok()
+        <T as Fetch>::fetch_from(*source, entity_location).ok()
     }
 
     fn types_id() -> Vec<TypeId> {
@@ -227,23 +241,11 @@ impl<T: for<'a> Fetch<'a> + 'static> Constraints for T {
     }
 }
 
-// Used only inside `impl_query_params!` to give every element of a tuple the same `Source`
-// type (`&'a ComponentList`) while still referencing `$tail`/`$head` in the projection, which
-// macro_rules requires to know how many times to repeat.
-#[doc(hidden)]
-pub trait Resolved<'a> {
-    type Source;
-}
-
-impl<'a, F: Fetch<'a>> Resolved<'a> for F {
-    type Source = &'a ComponentList;
-}
-
 macro_rules! impl_query_params {
     ( $head:ident ) => {
         impl<'a, $head: Fetch<'a> + 'static> QueryParams<'a> for ($head,) {
             type QueryResult = $head::Result;
-            type Source = &'a ComponentList;
+            type Source = <$head as Fetch<'a>>::Source;
 
             fn resolve(archetype: &'a Archetype) -> Option<Self::Source> {
                 <$head as Fetch>::resolve(archetype)
@@ -253,7 +255,7 @@ macro_rules! impl_query_params {
                 source: &Self::Source,
                 entity_location: u32,
             ) -> Option<Self::QueryResult> {
-                <$head as Fetch>::fetch_from(source, entity_location).ok()
+                <$head as Fetch>::fetch_from(*source, entity_location).ok()
             }
 
             fn types_id() -> Vec<TypeId> {
@@ -272,7 +274,7 @@ macro_rules! impl_query_params {
         #[allow(non_snake_case)]
         impl<'a, $head: Fetch<'a>  + 'static, $($tail: Fetch<'a>  + 'static),+> QueryParams<'a> for ($head, $($tail),+) {
             type QueryResult = ($head::Result, $($tail::Result),+);
-            type Source = (<$head as Resolved<'a>>::Source, $(<$tail as Resolved<'a>>::Source),+);
+            type Source = (<$head as Fetch<'a>>::Source, $(<$tail as Fetch<'a>>::Source),+);
 
             fn resolve(archetype: &'a Archetype) -> Option<Self::Source> {
                 Some((
@@ -287,8 +289,8 @@ macro_rules! impl_query_params {
             ) -> Option<Self::QueryResult> {
                 let ($head, $($tail),+) = source;
                 Some((
-                    <$head as Fetch>::fetch_from($head, entity_location).ok()?,
-                    $(<$tail as Fetch>::fetch_from($tail, entity_location).ok()?),+
+                    <$head as Fetch>::fetch_from(*$head, entity_location).ok()?,
+                    $(<$tail as Fetch>::fetch_from(*$tail, entity_location).ok()?),+
                 ))
             }
 
@@ -309,7 +311,6 @@ macro_rules! impl_query_params {
         impl_query_params!($($tail),+);
     };
 }
-
 impl_query_params!(
     A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
 );
@@ -375,7 +376,7 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
                 continue;
             }
 
-            // Resolves every `ComponentList` this query needs *once* for this archetype,
+            // Resolves every component column this query needs *once* for this archetype,
             // instead of re-resolving them on every entity below.
             if let Some(source) = T::resolve(arch) {
                 for (index, _) in arch.entities.iter().enumerate() {

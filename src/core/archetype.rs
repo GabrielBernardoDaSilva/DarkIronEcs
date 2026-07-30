@@ -1,22 +1,24 @@
 use std::{cell::UnsafeCell, collections::HashMap};
 
+use crate::core::component::ComponentColumn;
+
 use super::{
-    component::{BundleComponent, Component, ComponentList},
+    component::{BundleComponent, Component},
     entity::EntityId,
     error::ArchetypeError,
 };
 
 /// Storage for every entity that shares the exact same set of component types, laid out as one
-/// [`ComponentList`] column per type. [`EntityManager`](super::entity_manager::EntityManager)
+/// [`ComponentColumn`] per type. [`EntityManager`](super::entity_manager::EntityManager)
 /// migrates an entity between archetypes whenever its component set changes.
 pub struct Archetype {
-    pub(crate) components: HashMap<std::any::TypeId, ComponentList>,
+    pub(crate) components: HashMap<std::any::TypeId, Box<dyn ComponentColumn>>,
     pub(crate) entities: Vec<EntityId>,
 }
 
 /// An entity's components, detached from their archetype during a migration (e.g. via
 /// [`Archetype::migrate_entity_to_other_archetype`]) before being re-inserted elsewhere.
-pub type MovedEntity = HashMap<std::any::TypeId, Box<UnsafeCell<dyn Component>>>;
+pub type MovedEntity = HashMap<std::any::TypeId, Box<dyn ComponentColumn>>;
 
 impl Archetype {
     /// Creates a new archetype containing a single entity with the given component bundle.
@@ -29,29 +31,21 @@ impl Archetype {
     }
     /// Creates a new archetype from an entity's components detached during a migration.
     pub fn new_from_migration(entity_id: EntityId, components: MovedEntity) -> Self {
-        let mut components_map = HashMap::new();
-        for (type_id, component) in components {
-            components_map.insert(
-                type_id,
-                ComponentList {
-                    components: vec![component],
-                },
-            );
-        }
         Self {
-            components: components_map,
+            components,
             entities: vec![entity_id],
         }
     }
 
     /// Adds an entity with the given component bundle to this (already-matching) archetype.
     pub fn add_entity(&mut self, entity_id: EntityId, components: impl BundleComponent) {
-        for (type_id, component_list) in components.create_map_components(entity_id) {
-            self.components
-                .entry(type_id)
-                .or_default()
-                .components
-                .extend(component_list.components);
+        for (type_id, column) in components.create_map_components(entity_id) {
+            match self.components.get_mut(&type_id) {
+                Some(existing) => existing.merge_from(column),
+                None => {
+                    self.components.insert(type_id, column);
+                }
+            }
         }
         self.entities.push(entity_id);
     }
@@ -59,12 +53,13 @@ impl Archetype {
     /// Re-inserts an entity (and its previously detached components) into this archetype
     /// after a migration.
     pub fn add_entity_migrated(&mut self, entity_id: EntityId, components: MovedEntity) {
-        for (type_id, component) in components {
-            self.components
-                .entry(type_id)
-                .or_default()
-                .components
-                .push(component);
+        for (type_id, column) in components {
+            match self.components.get_mut(&type_id) {
+                Some(existing) => existing.merge_from(column),
+                None => {
+                    self.components.insert(type_id, column);
+                }
+            }
         }
         self.entities.push(entity_id);
     }
@@ -80,11 +75,10 @@ impl Archetype {
         match index {
             Some(index) => {
                 let mut components = HashMap::new();
-                for (type_id, component_list) in self.components.iter_mut() {
-                    let moved_component = component_list.remove(index);
-                    components.insert(*type_id, moved_component);
+                for (type_id, column) in self.components.iter_mut() {
+                    components.insert(*type_id, column.extract_single(index));
                 }
-                self.entities.remove(index);
+                self.entities.swap_remove(index);
                 Ok((entity_id, components))
             }
             None => Err(ArchetypeError::EntityNotFound),
@@ -97,10 +91,10 @@ impl Archetype {
         let index = self.entities.iter().position(|&x| x == entity_id);
         match index {
             Some(index) => {
-                for component_list in self.components.values_mut() {
-                    component_list.remove(index);
+                for column in self.components.values_mut() {
+                    column.swap_remove_drop(index);
                 }
-                self.entities.remove(index);
+                self.entities.swap_remove(index);
                 Ok(())
             }
             None => Err(ArchetypeError::EntityNotFound),
@@ -121,18 +115,22 @@ impl Archetype {
     /// if the entity or component type isn't present.
     pub fn get_component<T: Component + 'static>(&self, entity_id: EntityId) -> Option<*const T> {
         let local_index = self.entities.iter().position(|&id| id == entity_id)?;
-        let component_list = self.components.get(&std::any::TypeId::of::<T>())?;
-        component_list.get(local_index)
+        let column = self.components.get(&std::any::TypeId::of::<T>())?;
+        let list = column.as_any().downcast_ref::<UnsafeCell<Vec<T>>>()?;
+        let value = unsafe { (&*list.get()).get(local_index)? };
+
+        Some(value as *const _)
     }
 
     /// Mutable counterpart to [`Archetype::get_component`].
-    pub fn get_component_mut<T: Component + 'static>(
-        &self,
-        entity_id: EntityId,
-    ) -> Option<*mut T> {
+    pub fn get_component_mut<T: Component + 'static>(&self, entity_id: EntityId) -> Option<*mut T> {
         let local_index = self.entities.iter().position(|&id| id == entity_id)?;
-        let component_list = self.components.get(&std::any::TypeId::of::<T>())?;
-        component_list.get_mut(local_index)
+
+        let column = self.components.get(&std::any::TypeId::of::<T>())?;
+        let list = column.as_any().downcast_ref::<UnsafeCell<Vec<T>>>()?;
+        let value = unsafe { (&mut *list.get()).get_mut(local_index)? };
+
+        Some(value as *mut _)
     }
 }
 
