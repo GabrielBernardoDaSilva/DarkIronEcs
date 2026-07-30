@@ -6,7 +6,7 @@ use crate::core::system::SystemParam;
 
 use std::any::TypeId;
 use std::cell::{RefCell, UnsafeCell};
-use std::pin::Pin;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -31,6 +31,12 @@ impl QuerySignature {
             present_only,
         }
     }
+}
+
+struct QueryCache<'a> {
+    table: &'a RefCell<HashMap<QuerySignature, (u64, Vec<usize>)>>,
+    version: &'a u64,
+    signature: QuerySignature,
 }
 
 /// Implemented for types (and tuples of types, up to 26 elements) that a [`Query`] can fetch —
@@ -148,10 +154,11 @@ impl<T: Constraints> QueryConstraint for With<T> {
 /// }
 /// ```
 pub struct Query<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint = ()> {
-    pub archetypes: Pin<&'a Vec<Archetype>>,
+    pub archetypes: &'a Vec<Archetype>,
     types: Vec<TypeId>,
     excluded_types: Vec<TypeId>,
     required_types: Vec<TypeId>,
+    cache: Option<QueryCache<'a>>,
     _marked: std::marker::PhantomData<(T, Constraint)>,
 }
 
@@ -365,41 +372,66 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
     /// Builds a query over the given archetype list. Usually not called directly — prefer
     /// [`World::create_query`](super::world::World::create_query) or taking a `Query` as a
     /// system parameter.
-    pub fn new(archetypes: Pin<&'a Vec<Archetype>>) -> Query<'a, T, Constraint> {
+    pub fn new(archetypes: &'a Vec<Archetype>) -> Query<'a, T, Constraint> {
         Query {
             archetypes,
             types: T::types_id(),
             excluded_types: Constraint::constraint_types(),
             required_types: Constraint::required_types(),
+            cache: None,
+            _marked: std::marker::PhantomData,
+        }
+    }
+
+    pub(crate) fn new_with_cache(
+        archetypes: &'a Vec<Archetype>,
+        table: &'a RefCell<HashMap<QuerySignature, (u64, Vec<usize>)>>,
+        version: &'a u64,
+    ) -> Query<'a, T, Constraint> {
+        let types = T::types_id();
+        let excluded_types = Constraint::constraint_types();
+        let required_types = Constraint::required_types();
+        let signature = QuerySignature::new(
+            types.clone(),
+            excluded_types.clone(),
+            required_types.clone(),
+        );
+        Query {
+            archetypes,
+            types,
+            excluded_types,
+            required_types,
+            cache: Some(QueryCache {
+                table,
+                version,
+                signature,
+            }),
             _marked: std::marker::PhantomData,
         }
     }
 
     /// Runs the query, returning one result per matching entity.
     pub fn fetch(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
-        let mut components = Vec::new();
-
-        for arch in self.archetypes.iter() {
-            let has_any_entities = arch.entities.is_empty();
-            let query_needs_more_types_than_archetype_has =
-                self.types.len() > arch.components.len();
-            let has_constraint = self
-                .excluded_types
-                .iter()
-                .any(|type_id| -> bool { arch.has_type(*type_id) });
-            let is_missing = self
-                .required_types
-                .iter()
-                .any(|type_id| -> bool { !arch.has_type(*type_id) });
-
-            if has_any_entities
-                || query_needs_more_types_than_archetype_has
-                || has_constraint
-                || is_missing
-            {
-                continue;
+        let matching_indices: Vec<usize> = match &self.cache {
+            Some(cache) => {
+                let mut table = cache.table.borrow_mut();
+                match table.get(&cache.signature) {
+                    Some((seen_version, indices)) if *seen_version == *cache.version => {
+                        indices.clone()
+                    }
+                    _ => {
+                        let indices = self.scan_matching_archetypes();
+                        table.insert(cache.signature.clone(), (*cache.version, indices.clone()));
+                        indices
+                    }
+                }
             }
+            None => self.scan_matching_archetypes(),
+        };
 
+        let mut components = Vec::new();
+        for &arch_index in &matching_indices {
+            let arch = &self.archetypes[arch_index];
             // Resolves every component column this query needs *once* for this archetype,
             // instead of re-resolving them on every entity below.
             if let Some(source) = T::resolve(arch) {
@@ -411,6 +443,36 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
             }
         }
         components
+    }
+
+    fn scan_matching_archetypes(&self) -> Vec<usize> {
+        self.archetypes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, arch)| {
+                let has_any_entities = arch.entities.is_empty();
+                let query_needs_more_types_than_archetype_has =
+                    self.types.len() > arch.components.len();
+                let has_constraint = self
+                    .excluded_types
+                    .iter()
+                    .any(|type_id| arch.has_type(*type_id));
+                let is_missing = self
+                    .required_types
+                    .iter()
+                    .any(|type_id| !arch.has_type(*type_id));
+
+                if has_any_entities
+                    || query_needs_more_types_than_archetype_has
+                    || has_constraint
+                    || is_missing
+                {
+                    None
+                } else {
+                    Some(index)
+                }
+            })
+            .collect()
     }
 }
 
@@ -436,8 +498,10 @@ impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam
         let entity_manager: Rc<RefCell<super::entity_manager::EntityManager>> =
             coordinator.borrow().entity_manager.clone();
         let ptr = entity_manager.as_ptr();
-        let archetypes = Pin::new(unsafe { &(*ptr).archetypes });
-        Query::<T, Constraint>::new(archetypes)
+        let archetypes = unsafe { &(*ptr).archetypes };
+        let table = unsafe { &(*ptr).query_cache };
+        let version = unsafe { &(*ptr).archetype_version };
+        Query::<T, Constraint>::new_with_cache(archetypes, table, version)
     }
 }
 
@@ -456,8 +520,72 @@ fn query_test() {
     #[allow(dead_code)]
     pub struct Name(String);
     let v = vec![];
-    let q = Query::<&Health>::new(Pin::new(&v));
+    let q = Query::<&Health>::new(&v);
     for h in q.fetch() {
         println!("{:?}", h);
     }
+}
+
+#[test]
+fn query_cache_hit_reuses_indices_without_duplicating_entries() {
+    #[allow(dead_code)]
+    struct Health(i32);
+
+    let mut em = super::entity_manager::EntityManager::new();
+    em.create_entity((Health(1),));
+
+    let table = RefCell::new(HashMap::new());
+
+    {
+        let version = em.archetype_version;
+        let archetypes = &em.archetypes;
+        let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
+        assert_eq!(q.fetch().len(), 1);
+    }
+    assert_eq!(table.borrow().len(), 1);
+
+    {
+        let version = em.archetype_version;
+        let archetypes = &em.archetypes;
+        let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
+        assert_eq!(q.fetch().len(), 1);
+    }
+    assert_eq!(
+        table.borrow().len(),
+        1,
+        "second call must reuse the cached entry, not add a new one"
+    );
+}
+
+#[test]
+fn query_cache_invalidates_when_archetype_version_changes() {
+    #[allow(dead_code)]
+    struct Health(i32);
+    #[allow(dead_code)]
+    struct Name(String);
+
+    let mut em = super::entity_manager::EntityManager::new();
+    em.create_entity((Health(1),));
+
+    let table = RefCell::new(HashMap::new());
+
+    {
+        let version = em.archetype_version;
+        let archetypes = &em.archetypes;
+        let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
+        assert_eq!(q.fetch().len(), 1);
+    }
+
+    // New archetype shape -> bumps archetype_version.
+    em.create_entity((Health(2), Name("x".into())));
+
+    let version = em.archetype_version;
+    let archetypes = &em.archetypes;
+    let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
+    let results = q.fetch();
+    assert_eq!(
+        results.len(),
+        2,
+        "cache must pick up the new archetype after invalidation"
+    );
 }

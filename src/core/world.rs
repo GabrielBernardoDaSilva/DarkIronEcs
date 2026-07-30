@@ -1,4 +1,4 @@
-use std::{cell::RefCell, pin::Pin, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use super::{
     component::{BundleComponent, Component},
@@ -109,7 +109,7 @@ impl World {
     pub fn create_query<'a, T: QueryParams<'a>>(&'a self) -> Query<'a, T> {
         let entity_manager = self.entity_manager.clone();
         let archetype_ptr = unsafe { &(*entity_manager.as_ptr()).archetypes };
-        Query::<T>::new(Pin::new(archetype_ptr))
+        Query::<T>::new(archetype_ptr)
     }
 
     /// Like [`World::create_query`], additionally filtering entities by constraint `C`
@@ -119,7 +119,7 @@ impl World {
     ) -> Query<'a, T, C> {
         let entity_manager = self.entity_manager.clone();
         let archetype_ptr = unsafe { &(*entity_manager.as_ptr()).archetypes };
-        Query::<T, C>::new(Pin::new(archetype_ptr))
+        Query::<T, C>::new(archetype_ptr)
     }
 
     /// Registers `system` to run during `system_scheduler`. Returns `&mut Self` for chaining.
