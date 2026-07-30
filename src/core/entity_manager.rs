@@ -15,7 +15,8 @@ use super::{
 pub struct EntityManager {
     pub entities: Vec<Entity>,
     pub archetypes: Vec<Archetype>,
-    next_entity_id: u32, // L6: contador monotônico — evita colisão de IDs após remoções
+    next_entity_id: u32, // L6: Monotomic Incrementing Counter
+    pub(crate) archetype_version: u64,
 }
 
 impl SystemParam for &EntityManager {
@@ -77,6 +78,7 @@ impl EntityManager {
             None => {
                 let archetype = Archetype::new(entity.id, components);
                 self.archetypes.push(archetype);
+                self.archetype_version += 1;
                 entity.entity_location = self.archetypes.len() - 1;
             }
         }
@@ -194,6 +196,7 @@ impl EntityManager {
         } else {
             let archetype = Archetype::new_from_migration(entity.id, components);
             self.archetypes.push(archetype);
+            self.archetype_version += 1;
             let new_idx = self.archetypes.len() - 1;
             if let Some(e) = self.entities.iter_mut().find(|e| e.id == entity.id) {
                 e.entity_location = new_idx;
@@ -246,6 +249,7 @@ impl EntityManager {
 
     fn remove_archetype(&mut self, idx: usize) {
         self.archetypes.remove(idx);
+        self.archetype_version += 1;
         for entity in self.entities.iter_mut() {
             if entity.entity_location > idx {
                 entity.entity_location -= 1;
@@ -328,5 +332,36 @@ pub mod storage_regression_test {
         assert_eq!(unsafe { &*em.get_component::<B>(e1).unwrap() }, &B(100));
         assert_eq!(unsafe { &*em.get_component::<A>(e3).unwrap() }, &A(30));
         assert_eq!(unsafe { &*em.get_component::<B>(e3).unwrap() }, &B(300));
+    }
+
+    #[test]
+    fn archetype_version_bumps_only_on_new_archetype_shape() {
+        let mut em = EntityManager::new();
+        let v0 = em.archetype_version;
+
+        em.create_entity((A(1),)); // new shape -> bump
+        let v1 = em.archetype_version;
+        assert_eq!(v1, v0 + 1);
+
+        em.create_entity((A(2),)); // same shape as an existing archetype -> no bump
+        let v2 = em.archetype_version;
+        assert_eq!(v2, v1);
+
+        em.create_entity((A(3), B(1))); // new shape -> bump
+        let v3 = em.archetype_version;
+        assert_eq!(v3, v2 + 1);
+    }
+
+    #[test]
+    fn archetype_version_bumps_when_an_archetype_is_removed() {
+        let mut em = EntityManager::new();
+        let e1 = em.create_entity((A(1), B(1)));
+        let _e2 = em.create_entity((A(2),)); // second, different shape
+        let v_before = em.archetype_version;
+
+        // Removing B leaves e1's old (A, B) archetype empty, which gets pruned.
+        em.remove_component::<B>(e1);
+
+        assert!(em.archetype_version > v_before);
     }
 }
