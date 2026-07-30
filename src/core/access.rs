@@ -4,18 +4,29 @@ use std::{any::TypeId, collections::HashMap};
 /// conflicting accesses within a single system call can be detected before they produce two
 /// live aliasing references to the same data.
 ///
-/// The three variants are separate namespaces: a `Component(TypeId::of::<Position>())` and a
-/// `Resource(TypeId::of::<Position>())` never conflict with each other even though they share
-/// a `TypeId`, because nothing stops the same Rust type being used as both a component and a
-/// resource.
+/// [`Query`](super::query::Query) component accesses aren't tracked through this key — see
+/// [`AccessTracker::track_query`], which can additionally prove two queries can never match the
+/// same entity (e.g. via `Without`) and skip the conflict entirely.
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub(crate) enum AccessKey {
     /// One of the five whole managers reachable via `Coordinator::get_*_mut`.
     Manager(TypeId),
-    /// A single component type, as fetched by a [`Query`](super::query::Query).
-    Component(TypeId),
     /// A single resource type, as fetched by [`Resource<T>`](super::resources::Resource).
     Resource(TypeId),
+}
+
+/// One [`Query`](super::query::Query)'s accesses, as registered with
+/// [`AccessTracker::track_query`].
+struct QueryAccess {
+    /// Component types actually dereferenced by the query, paired with whether the access is
+    /// mutable. Overlap here (with incompatible mutability) between two queries is a real
+    /// aliasing risk.
+    fetched: Vec<(TypeId, bool)>,
+    /// Component types required to be present via a `With<T>` filter, but never dereferenced.
+    /// Only used to help prove disjointness — never itself a source of conflict.
+    present_only: Vec<TypeId>,
+    /// Component types required to be *absent* via a `Without<T>` filter.
+    excluded: Vec<TypeId>,
 }
 
 /// Tracks the accesses made by the [`SystemParam`]s of a single, currently-running system, and
@@ -24,6 +35,7 @@ pub(crate) enum AccessKey {
 #[derive(Default)]
 pub(crate) struct AccessTracker {
     accesses: HashMap<AccessKey, bool>,
+    queries: Vec<QueryAccess>,
 }
 
 impl AccessTracker {
@@ -43,8 +55,63 @@ impl AccessTracker {
         self.accesses.insert(key, mutable);
     }
 
-    /// Forgets every access recorded so far, so the next system call starts clean.
+    /// Registers a [`Query`](super::query::Query)'s accesses, panicking if they conflict with
+    /// an already-registered query in this system call — unless the two queries can be proven
+    /// to never match the same entity (one excludes, via `Without`, a type the other requires,
+    /// either fetched or via `With`), in which case there's no real aliasing risk and no
+    /// conflict is raised.
+    pub(crate) fn track_query(
+        &mut self,
+        fetched: Vec<(TypeId, bool)>,
+        present_only: Vec<TypeId>,
+        excluded: Vec<TypeId>,
+        type_name: &'static str,
+    ) {
+        let required: Vec<TypeId> = fetched
+            .iter()
+            .map(|(t, _)| *t)
+            .chain(present_only.iter().copied())
+            .collect();
+
+        for other in &self.queries {
+            let other_required: Vec<TypeId> = other
+                .fetched
+                .iter()
+                .map(|(t, _)| *t)
+                .chain(other.present_only.iter().copied())
+                .collect();
+
+            let provably_disjoint = other_required.iter().any(|t| excluded.contains(t))
+                || required.iter().any(|t| other.excluded.contains(t));
+            if provably_disjoint {
+                continue;
+            }
+
+            for (type_id, mutable) in &fetched {
+                if let Some((_, other_mutable)) =
+                    other.fetched.iter().find(|(t, _)| t == type_id)
+                    && (*mutable || *other_mutable)
+                {
+                    panic!(
+                        "SystemParam conflict: Query<{type_name}> conflicts with another \
+                         Query in the same system over a shared component. Add a \
+                         `Without<...>` filter proving the two queries never match the same \
+                         entity, or split into separate systems."
+                    );
+                }
+            }
+        }
+
+        self.queries.push(QueryAccess {
+            fetched,
+            present_only,
+            excluded,
+        });
+    }
+
+    /// Forgets every access recorded so far, so the next system
     pub(crate) fn clear(&mut self) {
         self.accesses.clear();
+        self.queries.clear();
     }
 }

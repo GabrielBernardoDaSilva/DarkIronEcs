@@ -257,3 +257,74 @@ impl Default for EntityManager {
         Self::new()
     }
 }
+
+#[cfg(test)]
+pub mod storage_regression_test {
+    use super::*;
+
+    #[derive(PartialEq, Eq, Debug)]
+    struct A(i32);
+
+    #[derive(PartialEq, Eq, Debug)]
+    struct B(i32);
+
+    #[derive(PartialEq, Eq, Debug)]
+    struct C(i32);
+
+    #[test]
+    fn migration_preserve_other_components_on_remove() {
+        let mut em = EntityManager::default();
+        let entity = em.create_entity((A(1), B(2), C(3)));
+        em.remove_component::<B>(entity);
+
+        let a = em.get_component::<A>(entity).unwrap();
+        let c = em.get_component::<C>(entity).unwrap();
+        assert_eq!(unsafe { &*a }, &A(1));
+        assert_eq!(unsafe { &*c }, &C(3));
+        assert!(em.get_component::<B>(entity).is_err());
+    }
+
+    #[test]
+    fn migration_preserves_other_components_on_add() {
+        let mut em = EntityManager::new();
+        let entity = em.create_entity((A(1),));
+
+        em.add_component_to_entity(entity, B(2));
+
+        let a = em.get_component::<A>(entity).unwrap();
+        let b = em.get_component::<B>(entity).unwrap();
+        assert_eq!(unsafe { &*a }, &A(1));
+        assert_eq!(unsafe { &*b }, &B(2));
+    }
+
+    #[test]
+    fn removing_one_entity_does_not_corrupt_siblings() {
+        let mut em = EntityManager::new();
+        let e1 = em.create_entity((A(1),));
+        let e2 = em.create_entity((A(2),));
+        let e3 = em.create_entity((A(3),));
+
+        em.remove_entity(e2);
+
+        let a1 = em.get_component::<A>(e1).unwrap();
+        let a3 = em.get_component::<A>(e3).unwrap();
+        assert_eq!(unsafe { &*a1 }, &A(1));
+        assert_eq!(unsafe { &*a3 }, &A(3));
+        assert!(em.get_component::<A>(e2).is_err());
+    }
+
+    #[test]
+    fn removing_middle_entity_of_three_preserves_the_other_two() {
+        let mut em = EntityManager::new();
+        let e1 = em.create_entity((A(10), B(100)));
+        let e2 = em.create_entity((A(20), B(200)));
+        let e3 = em.create_entity((A(30), B(300)));
+
+        em.remove_entity(e2);
+
+        assert_eq!(unsafe { &*em.get_component::<A>(e1).unwrap() }, &A(10));
+        assert_eq!(unsafe { &*em.get_component::<B>(e1).unwrap() }, &B(100));
+        assert_eq!(unsafe { &*em.get_component::<A>(e3).unwrap() }, &A(30));
+        assert_eq!(unsafe { &*em.get_component::<B>(e3).unwrap() }, &B(300));
+    }
+}
