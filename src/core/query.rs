@@ -411,7 +411,7 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
     }
 
     /// Runs the query, returning one result per matching entity.
-    pub fn fetch(&'a self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
+    pub fn fetch(&self) -> Vec<<T as QueryParams<'a>>::QueryResult> {
         let matching_indices: Vec<usize> = match &self.cache {
             Some(cache) => {
                 let mut table = cache.table.borrow_mut();
@@ -476,6 +476,17 @@ impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> Query<'a, T,
     }
 }
 
+impl<'a, T: QueryParams<'a> + 'static, Constraint: QueryConstraint> IntoIterator
+    for Query<'a, T, Constraint>
+{
+    type Item = <T as QueryParams<'a>>::QueryResult;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.fetch().into_iter()
+    }
+}
+
 impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam
     for Query<'a, T, Constraint>
 {
@@ -505,87 +516,110 @@ impl<'a, T: QueryParams<'a>, Constraint: QueryConstraint + 'static> SystemParam
     }
 }
 
-#[test]
-fn query_test() {
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    pub struct Health(i32);
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    pub struct Position(i32, i32);
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    pub struct Velocity(i32, i32);
-    #[derive(Debug)]
-    #[allow(dead_code)]
-    pub struct Name(String);
-    let v = vec![];
-    let q = Query::<&Health>::new(&v);
-    for h in q.fetch() {
-        println!("{:?}", h);
+#[cfg(test)]
+mod query_test {
+    use super::*;
+    use crate::core::entity_manager::EntityManager;
+
+    #[test]
+    fn query_supports_for_loop_directly_via_into_iterator() {
+        #[allow(dead_code)]
+        struct Health(i32);
+        let mut em = EntityManager::new();
+        em.create_entity((Health(1),));
+        em.create_entity((Health(2),));
+
+        let archetypes = &em.archetypes;
+        let q = Query::<&Health>::new(archetypes);
+        let mut total = 0;
+        for h in q {
+            total += h.0;
+        }
+        assert_eq!(total, 3);
     }
-}
 
-#[test]
-fn query_cache_hit_reuses_indices_without_duplicating_entries() {
-    #[allow(dead_code)]
-    struct Health(i32);
+    #[test]
+    fn query_test() {
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        pub struct Health(i32);
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        pub struct Position(i32, i32);
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        pub struct Velocity(i32, i32);
+        #[derive(Debug)]
+        #[allow(dead_code)]
+        pub struct Name(String);
+        let v = vec![];
+        let q = Query::<&Health>::new(&v);
+        for h in q.fetch() {
+            println!("{:?}", h);
+        }
+    }
 
-    let mut em = super::entity_manager::EntityManager::new();
-    em.create_entity((Health(1),));
+    #[test]
+    fn query_cache_hit_reuses_indices_without_duplicating_entries() {
+        #[allow(dead_code)]
+        struct Health(i32);
 
-    let table = RefCell::new(HashMap::new());
+        let mut em = EntityManager::new();
+        em.create_entity((Health(1),));
 
-    {
+        let table = RefCell::new(HashMap::new());
+
+        {
+            let version = em.archetype_version;
+            let archetypes = &em.archetypes;
+            let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
+            assert_eq!(q.fetch().len(), 1);
+        }
+        assert_eq!(table.borrow().len(), 1);
+
+        {
+            let version = em.archetype_version;
+            let archetypes = &em.archetypes;
+            let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
+            assert_eq!(q.fetch().len(), 1);
+        }
+        assert_eq!(
+            table.borrow().len(),
+            1,
+            "second call must reuse the cached entry, not add a new one"
+        );
+    }
+
+    #[test]
+    fn query_cache_invalidates_when_archetype_version_changes() {
+        #[allow(dead_code)]
+        struct Health(i32);
+        #[allow(dead_code)]
+        struct Name(String);
+
+        let mut em = EntityManager::new();
+        em.create_entity((Health(1),));
+
+        let table = RefCell::new(HashMap::new());
+
+        {
+            let version = em.archetype_version;
+            let archetypes = &em.archetypes;
+            let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
+            assert_eq!(q.fetch().len(), 1);
+        }
+
+        // New archetype shape -> bumps archetype_version.
+        em.create_entity((Health(2), Name("x".into())));
+
         let version = em.archetype_version;
         let archetypes = &em.archetypes;
         let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
-        assert_eq!(q.fetch().len(), 1);
+        let results = q.fetch();
+        assert_eq!(
+            results.len(),
+            2,
+            "cache must pick up the new archetype after invalidation"
+        );
     }
-    assert_eq!(table.borrow().len(), 1);
-
-    {
-        let version = em.archetype_version;
-        let archetypes = &em.archetypes;
-        let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
-        assert_eq!(q.fetch().len(), 1);
-    }
-    assert_eq!(
-        table.borrow().len(),
-        1,
-        "second call must reuse the cached entry, not add a new one"
-    );
-}
-
-#[test]
-fn query_cache_invalidates_when_archetype_version_changes() {
-    #[allow(dead_code)]
-    struct Health(i32);
-    #[allow(dead_code)]
-    struct Name(String);
-
-    let mut em = super::entity_manager::EntityManager::new();
-    em.create_entity((Health(1),));
-
-    let table = RefCell::new(HashMap::new());
-
-    {
-        let version = em.archetype_version;
-        let archetypes = &em.archetypes;
-        let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
-        assert_eq!(q.fetch().len(), 1);
-    }
-
-    // New archetype shape -> bumps archetype_version.
-    em.create_entity((Health(2), Name("x".into())));
-
-    let version = em.archetype_version;
-    let archetypes = &em.archetypes;
-    let q = Query::<&Health>::new_with_cache(archetypes, &table, &version);
-    let results = q.fetch();
-    assert_eq!(
-        results.len(),
-        2,
-        "cache must pick up the new archetype after invalidation"
-    );
 }
